@@ -87,7 +87,7 @@ class Array:
     """
     Updates the array.
     """
-    self.spi.writebytes([min(int(val * 256), 255) for val in self.vals])
+    self.spi.xfer([min(int(val * 256), 255) for val in self.vals])
 
 class PrettyLed:
   """
@@ -133,7 +133,7 @@ class WallE:
     """
     self.spi = spidev.SpiDev()
     self.spi.open(bus, index)
-    self.spilsbfirst = False
+    self.spi.lsbfirst = False
     self.spi.max_speed_hz = 1000000
     self.spi.mode = 0b00
-    self.array = Array(self.spi, 50)
+    self.array = Array(self.spi, 100)
