@@ -1,12 +1,13 @@
+import collections
 import copy
 import spidev
 
-Color = namedtuple('Color', ['r', 'g', 'b'])
+Color = collections.namedtuple('Color', ['r', 'g', 'b'])
 
 def valid_walle_color(color):
     return all(ch >= 0 and ch <= 1.0 for ch in color)
 
-def color8_to_walle_color(self, color):
+def color8_to_walle_color(color):
     assert len(color) == 3
     assert all([ch >= 0 and ch < 256 and int(ch) == ch] for ch in color)
 
@@ -14,10 +15,11 @@ def color8_to_walle_color(self, color):
     # truncation more fair.
     return walle.Color(*(ch / 255. for ch in color8bit))
 
-def walle_color_to_color8(self, color):
+def walle_color_to_color8(color):
     assert len(color) == 3
     assert all([ch >= 0 and ch <= 1. for ch in color])
     return tuple(min(int(ch * 256), 255) for ch in color)
+
 class WallE:
     def __init__(self, bus=0, index=0, num_rows=10, num_cols=10, enable_gamma=True, sclk_hz=250000):
         """
@@ -34,7 +36,7 @@ class WallE:
         self._num_cols = num_cols
         self._enable_gamma = enable_gamma
 
-        self.update(self.all_off_matrix())
+        self.set(self.all_off_matrix())
 
     def set(self, matrix):
         assert len(matrix) == self._num_rows
@@ -44,7 +46,7 @@ class WallE:
                 assert valid_walle_color(color)
         if self._enable_gamma:
             matrix = self._gamma_corrected(matrix)
-        self.spi.xfer(self._flatten(matrix))
+        self._spi.xfer(self._flatten(matrix))
 
     def get_num_rows(self):
         return self._num_rows
@@ -52,7 +54,7 @@ class WallE:
     def get_num_cols(self):
         return self._num_cols
 
-    def all_off_matrix(self)
+    def all_off_matrix(self):
         return [[Color(r=0, g=0, b=0)] * self._num_cols] * self._num_rows
 
     def all_on_matrix(self):
@@ -69,8 +71,8 @@ class WallE:
     def _flatten(self, matrix):
         # reversing odd rows accounts for snaking of physical LED chain
         snaked_rows = (row if i % 2 == 0 else reversed(row) for i, row in enumerate(matrix))
-        flattened_colors = (color for row in snaked_rows for color in row)
-        flattened_rgb = [ch for color in snaked_colors for ch in walle_color_to_color8(color)]
-        assert len(flattened_rgb) == 3 * self._num_rows * self._num_cols
-        assert all(ch >= 0 and ch < 256 for ch in flattened_rgb)
-        return flattened_rgb
+        snaked_colors = (color for row in snaked_rows for color in row)
+        flattened_colors = [ch for color in snaked_colors for ch in walle_color_to_color8(color)]
+        assert len(flattened_colors) == 3 * self._num_rows * self._num_cols
+        assert all(ch >= 0 and ch < 256 for ch in flattened_colors)
+        return flattened_colors
