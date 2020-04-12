@@ -55,10 +55,12 @@ class WallE:
         return self._num_cols
 
     def all_off_matrix(self):
-        return [[Color(r=0, g=0, b=0)] * self._num_cols] * self._num_rows
+        # expected to return a copy
+        return [[Color(r=0, g=0, b=0) for _ in range(self._num_cols)] for _ in range(self._num_rows)]
 
     def all_on_matrix(self):
-        return [[Color(r=1, g=1, b=1)] * self._num_cols] * self._num_rows
+        # expected to return a copy
+        return [[Color(r=1, g=1, b=1) for _ in range(self._num_cols)] for _ in range(self._num_rows)]
 
     def _gamma_corrected(self, matrix):
         # perform the corrections on a copy
@@ -69,9 +71,11 @@ class WallE:
         return matrix
 
     def _flatten(self, matrix):
-        # reversing odd rows accounts for snaking of physical LED chain
-        snaked_rows = (row if i % 2 == 0 else reversed(row) for i, row in enumerate(matrix))
-        snaked_colors = (color for row in snaked_rows for color in row)
+        # rows are physically wired low to high, so row order must be reversed. every other row must
+        # also be internally reversed to account for chain snaking.
+        snaked_rows = (row if i % 2 == 0 else reversed(row)
+                        for i, row in enumerate(reversed(matrix)))
+        snaked_colors = [color for row in snaked_rows for color in row]
         flattened_colors = [ch for color in snaked_colors for ch in walle_color_to_color8(color)]
         assert len(flattened_colors) == 3 * self._num_rows * self._num_cols
         assert all(ch >= 0 and ch < 256 for ch in flattened_colors)
