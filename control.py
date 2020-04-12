@@ -4,6 +4,9 @@ import argparse
 import os
 from PIL import BmpImagePlugin, Image
 import pygame
+import subprocess
+import sys
+import tempfile
 import time
 import walle
 
@@ -138,21 +141,93 @@ class StatusDisplay:
     def __del__(self):
         pygame.quit()
 
+def parse_WxH(s):
+    return tuple(int(d) for d in s.split('x', maxsplit=1))
+
+def terminate_subprocs(procs):
+    print('Signalling children to exit...')
+    for proc in procs:
+        proc.terminate()
+    while any([proc.poll() is None for proc in procs]):
+        time.sleep(0.1)
+    for proc in procs:
+        print('PID {} exited with return code {}'.format(proc.pid, proc.returncode))
+
+def report_subproc(proc):
+    print('Started PID {}: {}'.format(proc.pid, ' '.join(proc.args)))
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('bmp_file', type=str)
+    parser.add_argument('--led_display_dim', type=str, default='10x10', help='WxH dimensions of LED '
+                        'display')
+    parser.add_argument('--x_display', type=int, default=1, help='Display number to allocate for '
+                        'virtual frame buffer')
+    parser.add_argument('--x_display_dim', type=str, help='WxH dimensions to configure for virtual '
+                        'virtual frame buffer. Defaults to match LED display')
     args = parser.parse_args()
 
-    print('Using image file {}'.format(args.bmp_file))
-    bmp_matrix = BmpMatrix(args.bmp_file, 10, 10)
-    status = StatusDisplay('WallE Status', 400, 500)
+    # Figure display dimensions. The X display defaults to the same size as the LED display.
+    led_display_dim = parse_WxH(args.led_display_dim)
+    x_display_dim = parse_WxH(args.x_display_dim or args.led_display_dim)
+    print('Configuring {}x{} LED display and {}x{} X display'.format(*led_display_dim,
+          *x_display_dim))
+    if led_display_dim != x_display_dim:
+        print('Note: X display contents will be resized and antialiased')
 
-    while not status.is_exit_requested():
-        matrix = bmp_matrix.get_matrix()
-        status.update(matrix,
-                      'BMP staleness: {:.3f} ({})'.format(bmp_matrix.get_time_since_update(),
-                                                          bmp_matrix.get_status()),
-                      'WallE not implemented')
-        time.sleep(0.05)
+    procs = []
+    xvfb_screen = 0
+    frame_buffer_dir = os.path.join('/', 'tmp', 'walle_control')
+    frame_buffer_path = os.path.join(frame_buffer_dir, 'Xvfb_screen{}'.format(xvfb_screen))
+    os.makedirs(frame_buffer_dir, exist_ok=True)
+    print('Using FB: ', frame_buffer_path)
+
+    # Start virtual frame buffer server. -nocursor (X Server argument) avoids cursor arrow
+    # artifacts. Inhibit all I/O to prevent console spam/blocking I/O if pipes fill. Wait for the
+    # frame buffer file to exist.
+    procs.append(subprocess.Popen(['/usr/bin/Xvfb', ':{}'.format(args.x_display), '-screen',
+                                   str(xvfb_screen), '{}x{}x24'.format(*x_display_dim), '-fbdir',
+                                   frame_buffer_dir, '-nocursor'], stdin=subprocess.DEVNULL,
+                                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL))
+    report_subproc(procs[-1])
+
+    # Start periodic conversion of .xwd frame buffers to .bmp. Inhibit all I/O (same as above).
+    # Error messages aren't unexpected (e.g., frame buffer file might not yet exist).
+    #
+    # Note: Might be smart to make this synchronous with the main loop, actually.
+    bmp_path = os.path.join(frame_buffer_dir, 'fb.bmp')
+    procs.append(subprocess.Popen(['watch', '--interval=0.05', 'convert',
+                                     'xwd:' + frame_buffer_path, 'bmp:' + bmp_path],
+                                  stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                                  stderr=subprocess.DEVNULL))
+    report_subproc(procs[-1])
+    print('Using BMP: ', bmp_path)
+
+    # Wait a moment for processes to start. Then double-check they are not already exited.
+    time.sleep(1)
+    for proc in procs:
+        if proc.poll() is not None:
+            print('Uh-oh, PID {} already exited with return code {}'.format(proc.pid,proc.returncode))
+            terminate_subprocs(procs)
+            sys.exit(1)
+
+    print('Waiting for virtual frame buffer {} to exist...'.format(frame_buffer_path))
+    while not os.path.exists(frame_buffer_path):
+        time.sleep(0.1)
+
+    print('Ctrl-C or close GUI window to exit')
+    bmp_matrix = BmpMatrix(bmp_path, *led_display_dim)
+    status = StatusDisplay('WallE Status', 400, 500)
+    try:
+        while not status.is_exit_requested():
+            matrix = bmp_matrix.get_matrix()
+            status.update(matrix,
+                          'BMP staleness: {:.3f} ({})'.format(bmp_matrix.get_time_since_update(),
+                                                              bmp_matrix.get_status()),
+                          'WallE not implemented')
+            time.sleep(0.01)
+    except KeyboardInterrupt:
+        pass
+
+    terminate_subprocs(procs)
         
     print('Exiting...')
