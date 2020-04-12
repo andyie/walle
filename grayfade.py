@@ -40,10 +40,10 @@ class Fader:
         return max(random.uniform(-2, 1), 0)
 
 if __name__ == '__main__':
-    w = walle.WallE()
-    rows, cols = w.dim()
+    driver = walle.LedDisplayDriver()
+    rows, cols = driver.dim()
     faders = [[Fader() for _ in cols] for _ in rows]
     while True:
         now = time.time()
-        w.set([[f.get(now) for f in row] for row in faders])
+        driver.set([[f.get(now) for f in row] for row in faders])
         time.sleep(0.05)

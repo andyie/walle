@@ -20,7 +20,7 @@ def walle_color_to_color8(color):
     assert all([ch >= 0 and ch <= 1. for ch in color])
     return tuple(min(int(ch * 256), 255) for ch in color)
 
-class WallE:
+class LedDisplayDriver:
     def __init__(self, bus=0, index=0, num_rows=10, num_cols=10, enable_gamma=True, sclk_hz=250000):
         """
         250 KHz SPI should be sufficient to transfer 24 bits of information to 100 LEDs in ~0.01
