@@ -1,56 +1,48 @@
 #!/usr/bin/python
 
 import math
+import numpy
 import random
 import time
 import walle
 
 class Fader:
-    def __init__(self, led, initial_time):
-        self._led = led
-        self._begin_time = initial_time
-        self._begin_val = self._choose_new_color()
-        self._end_val = self._choose_new_color()
-        self._fade_time = self._choose_new_fade_time()
+    def __init__(self):
+        self._t0 = None
+        self._t1 = None
+        self._v0 = self._random_v()
+        self._v1 = self._random_v()
 
-        self._set(self._begin_val)
+    def get(self, now):
+        # time is initialized on first call
+        if self._t0 is None:
+            assert self._t1 is None
+            self._t0 = now
+            self._t1 = now + self._random_t()
 
-    def update(self, current_time):
-        # choose a new target if the time has elapsed. we shouldn't have fallen
-        # behind by more than a full cycle.
-        elapsed = current_time - self._begin_time
-        if elapsed >= self._fade_time:
-            assert elapsed < 2 * self._fade_time
-            elapsed -= self._fade_time
-            self._begin_time += self._fade_time
-            self._begin_val = self._end_val
-            self._end_val = self._choose_new_color()
-            self._fade_time = self._choose_new_fade_time()
+        # choose a new color if necessary
+        if now > self._t1:
+            self._t0 = self._t1
+            self._t1 = self._t1 + self._random_t()
+            self._v0 = self._v1
+            self._v1 = self._random_v()
+            assert now <= self._t1
 
-        # linearly interpolate to the new value
-        val = self._begin_val + (self._end_val - self._begin_val) * elapsed / self._fade_time
-        self._set(val)
+        # interpolate
+        v = numpy.interp([now], [self._t0, self._t1], [self._v0, self._v1])[0]
+        return walle.Color(r=v, g=v, b=v)
         
-    def _choose_new_fade_time(self):
-        return 3 * random.random() + 1
+    def _random_t(self):
+        return random.uniform(1, 3)
 
-    def _choose_new_color(self):
-        return max(random.random() * 3 - 2.0, 0)
-
-    def _set(self, brightness):
-        self._led.red = brightness
-        self._led.green = brightness
-        self._led.blue = brightness
+    def _random_v(self):
+        # the contrast looks cooler when most faders are dark
+        return max(random.uniform(-2, 1), 0)
 
 if __name__ == '__main__':
-    w = walle.WallE(0, 0)
-    w.array.autoupdate = False
-
-    now = time.time()
-    faders = [Fader(walle.PrettyLed(led), now) for led in w.array.leds]
+    w = walle.WallE()
+    faders = [[Fader() for _ in w.get_num_cols()] for _ in w.get_num_rows()]
     while True:
-        time.sleep(0.05)
         now = time.time()
-        for fader in faders:
-            fader.update(now)
-        w.array.update()
+        w.set([[f.get(now) for f in row] for row in faders])
+        time.sleep(0.05)

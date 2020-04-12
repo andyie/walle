@@ -1,142 +1,76 @@
-#!/usr/bin/python
-
-from collections import namedtuple
+import copy
 import spidev
 
 Color = namedtuple('Color', ['r', 'g', 'b'])
 
-class Array:
-    """
-    Light thingy.
-    """
-    class Led:
-        """
-        Minion.
-        """
-        def __init__(self, array, index):
-            """
-            Constructor. Lol.
+def valid_walle_color(color):
+    return all(ch >= 0 and ch <= 1.0 for ch in color)
 
-            @param array The array this guy lives in.
-            @param index This guy's index in the array.
-            """
-            self.__dict__['array'] = array
-            self.__dict__['index'] = index
+def color8_to_walle_color(self, color):
+    assert len(color) == 3
+    assert all([ch >= 0 and ch < 256 and int(ch) == ch] for ch in color)
 
-        def set(self, red=0, green=0, blue=0):
-            """
-            Set all components of the LED all at once.
-            """
-            self.__store('red', red)
-            self.__store('green', green)
-            self.__store('blue', blue)
-            if self.array.autoupdate:
-                self.array.update()
+    # Note: I think this could be improved by biasing up by 0.5 8-bit LSBs. This makes the
+    # truncation more fair.
+    return walle.Color(*(ch / 255. for ch in color8bit))
 
-        def get(self):
-            """
-            Get all commanded components of the LED as a dict.
-            """
-            return {key: self.__retrieve(key) for key in ['red', 'green', 'blue']}
-
-        def __store(self, name, val):
-            """
-            Stores a channel.
-            """
-            lookup = {'red':0, 'green':1, 'blue':2}
-            assert val >= 0 and val <= 1.0
-            self.array.vals[3 * self.index + lookup[name]] = val
-
-        def __retrieve(self, name):
-            """
-            Retrieves a channel.
-            """
-            lookup = {'red':0, 'green':1, 'blue':2}
-            return self.array.vals[3 * self.index + lookup[name]]
-
-        def __getattr__(self, name):
-            return self.__retrieve(name)
-
-        def __setattr__(self, name, val):
-            self.__store(name, val)
-            if self.array.autoupdate:
-                self.array.update()
-
-    def __init__(self, spi, size):
-        """
-        Constructor. Lol.
-
-        @param spi The initialized SPI interface, all right.
-        @param size The number of LEDs.
-        """
-        self.spi = spi
-        self.vals = [0, 0, 0] * size
-        self.leds = [self.Led(self, i) for i in range(0, size)]
-        self.autoupdate = True
-
-    def clear(self):
-        """
-        Clears the array.
-        """
-        tmp = self.autoupdate
-        self.autoupdate = False
-        for led in self.leds:
-            led.red = led.green = led.blue = 0
-        self.autoupdate = tmp
-        if self.autoupdate:
-            self.update()
-
-    def update(self):
-        """
-        Updates the array.
-        """
-        self.spi.xfer([min(int(val * 256), 255) for val in self.vals])
-
-class PrettyLed:
-    """
-    Gamma-corrected LED wrapper for prettiness.
-    """
-    def __init__(self, led):
-        """
-        Constructor. Lol.
-        """
-        self.__dict__['led'] = led
-        self.__dict__['red'] = 0
-        self.__dict__['green'] = 0
-        self.__dict__['blue'] = 0
-
-    def set(self, red=0, green=0, blue=0):
-        self.led.set(self.__gamma_correct(red),
-                                 self.__gamma_correct(green),
-                                 self.__gamma_correct(blue))
-
-    def get(self):
-        return {key: self.__dict__[key] for key in ['red', 'green', 'blue']}
-
-    def __gamma_correct(self, val):
-        return val ** 2.3
-
-    def __getattr__(self, name):
-        return self.__dict__[name]
-
-    def __setattr__(self, name, val):
-        self.__dict__[name] = val
-        self.led.__setattr__(name, self.__gamma_correct(val))
-
+def walle_color_to_color8(self, color):
+    assert len(color) == 3
+    assert all([ch >= 0 and ch <= 1. for ch in color])
+    return tuple(min(int(ch * 256), 255) for ch in color)
 class WallE:
-    """
-    God.
-    """
-    def __init__(self, bus, index):
+    def __init__(self, bus=0, index=0, num_rows=10, num_cols=10, enable_gamma=True, sclk_hz=250000):
         """
-        Constructor. Lol.
+        250 KHz SPI should be sufficient to transfer 24 bits of information to 100 LEDs in ~0.01
+        seconds. Some occasional glitching was observed on the real display at 1 MHz.
+        """
+        self._spi = spidev.SpiDev()
+        self._spi.open(bus, index)
+        self._spi.lsbfirst = False
+        self._spi.max_speed_hz = sclk_hz
+        self._spi.mode = 0b00
 
-        @param bus SPI bus.
-        @param bus SPI index.
-        """
-        self.spi = spidev.SpiDev()
-        self.spi.open(bus, index)
-        self.spi.lsbfirst = False
-        self.spi.max_speed_hz = 1000000
-        self.spi.mode = 0b00
-        self.array = Array(self.spi, 100)
+        self._num_rows = num_rows
+        self._num_cols = num_cols
+        self._enable_gamma = enable_gamma
+
+        self.update(self.all_off_matrix())
+
+    def set(self, matrix):
+        assert len(matrix) == self._num_rows
+        for row in matrix:
+            assert len(row) == self._num_cols
+            for color in row:
+                assert valid_walle_color(color)
+        if self._enable_gamma:
+            matrix = self._gamma_corrected(matrix)
+        self.spi.xfer(self._flatten(matrix))
+
+    def get_num_rows(self):
+        return self._num_rows
+
+    def get_num_cols(self):
+        return self._num_cols
+
+    def all_off_matrix(self)
+        return [[Color(r=0, g=0, b=0)] * self._num_cols] * self._num_rows
+
+    def all_on_matrix(self):
+        return [[Color(r=1, g=1, b=1)] * self._num_cols] * self._num_rows
+
+    def _gamma_corrected(self, matrix):
+        # perform the corrections on a copy
+        matrix = copy.deepcopy(matrix)
+        for row in matrix:
+            for i, color in enumerate(row):
+                row[i] = Color(*(ch ** 2.3 for ch in color))
+        return matrix
+
+    def _flatten(self, matrix):
+        # reversing odd rows accounts for snaking of physical LED chain
+        snaked_rows = (row if i % 2 == 0 else reversed(row) for i, row in enumerate(matrix))
+        flattened_colors = (color for row in snaked_rows for color in row)
+        flattened_rgb = [ch for color in snaked_colors for ch in walle_color_to_color8(color)]
+        assert len(flattened_rgb) == 3 * self._num_rows * self._num_cols
+        assert all(ch >= 0 and ch < 256 for ch in flattened_rgb)
+        return flattened_rgb

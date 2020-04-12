@@ -15,14 +15,9 @@ class BmpMatrix:
         self._bmp_file = bmp_file
         self._num_rows = num_rows
         self._num_cols = num_cols
-        self._matrix = [[walle.Color(r=1, g=1, b=1)] * num_cols] * num_rows
+        self._matrix = [[walle.Color(r=0, g=0, b=0)] * num_cols] * num_rows
         self._msg = 'uninitialized'
         self._last_mtime = None
-
-    def _8bit_color_to_walle_color(self, color8bit):
-        assert len(color8bit) == 3
-        assert all([ch >= 0 and ch < 256 and int(ch) == ch] for ch in color8bit)
-        return walle.Color(color8bit[0] / 255., color8bit[1] / 255., color8bit[2] / 255.)
 
     def _update_matrix(self):
         now = time.time()
@@ -56,7 +51,7 @@ class BmpMatrix:
             img = img.resize((self._num_cols, self._num_rows), resample=Image.LANCZOS)
         
         # update the matrix
-        self._matrix = [[self._8bit_color_to_walle_color(img.getpixel((col, row)))
+        self._matrix = [[walle.color8_to_walle_color(img.getpixel((col, row)))
                             for col in range(self._num_cols)]
                                 for row in range(self._num_rows)]
 
@@ -103,7 +98,7 @@ class StatusDisplay:
         # draw cells. let each cell own a small border as part of itself
         for row in range(num_rows):
             for col in range(num_cols):
-                color = self._walle_color_to_8bit_color(matrix[row][col])
+                color = walle.walle_color_to_color8(matrix[row][col])
                 rect = (col * cell_length, row * cell_length, cell_length, cell_length)
                 pygame.draw.rect(self._screen, color, rect, 0)
 
@@ -128,10 +123,6 @@ class StatusDisplay:
         # swap in the new display
         pygame.display.flip()
         self._last_update_time = now
-
-    def _walle_color_to_8bit_color(self, color):
-        assert all([ch >= 0 and ch <= 1. for ch in color])
-        return tuple(int(ch * 255) for ch in color)
 
     def is_exit_requested(self):
         return self._exit_requested
