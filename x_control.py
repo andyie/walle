@@ -74,7 +74,7 @@ class StatusDisplay:
         self._last_update_time = None
         self._exit_requested = False
 
-    def update(self, matrix, matrix_status, walle_status):
+    def update(self, matrix, matrix_status):
         now = time.time()
 
         # record any exit request
@@ -114,7 +114,7 @@ class StatusDisplay:
         gui_status = None
         if self._last_update_time is not None:
             gui_status = 'GUI cycle: {:.3f}'.format(now - self._last_update_time)
-        statuses = [walle_status, matrix_status, gui_status]
+        statuses = [matrix_status, gui_status]
         for i, status in enumerate(filter(lambda s: s, statuses)):
             status = self._font.render(status, True, (255, 255, 255))
             self._screen.blit(status, (status_pad_left, status_pad_top))
@@ -196,6 +196,7 @@ if __name__ == '__main__':
     print('Ctrl-C or close GUI window to exit')
     bmp_matrix = BmpMatrix(bmp_path, *led_display_dim)
     status = StatusDisplay('WallE Status', 400, 500)
+    w = walle.WallE(num_rows=led_display_dim[0], num_cols=led_display_dim[1])
     convert_proc = None
     try:
         while not status.is_exit_requested():
@@ -213,8 +214,8 @@ if __name__ == '__main__':
 
             status.update(matrix,
                           'BMP staleness: {:.3f} ({})'.format(bmp_matrix.get_bmp_latency(),
-                                                              bmp_matrix.get_status()),
-                          'WallE not implemented')
+                                                              bmp_matrix.get_status()))
+            w.set(matrix)
 
             # Delay a bit to avoid pegging the core.
             time.sleep(0.02)
