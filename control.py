@@ -118,7 +118,7 @@ class StatusDisplay:
         status_pad_left = 10
         gui_status = None
         if self._last_update_time is not None:
-            gui_status = 'GUI staleness: {:.3f}'.format(now - self._last_update_time)
+            gui_status = 'GUI cycle: {:.3f}'.format(now - self._last_update_time)
         statuses = [walle_status, matrix_status, gui_status]
         for i, status in enumerate(filter(lambda s: s, statuses)):
             status = self._font.render(status, True, (255, 255, 255))

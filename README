@@ -6,3 +6,7 @@ convert xwd:/tmp/Xvfb_screen0 tmp/out.png
 
 # SDL_.. option actually not necessary, I think
 DISPLAY=:1 SDL_VIDEODRIVER=x11 ./bounce.py
+
+package notes:
+* python-pygame (required for SDL dependencies)
+* xvfb (raspbian: xvfb; arch: xorg-xvfb-server)
