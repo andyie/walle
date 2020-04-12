@@ -63,7 +63,7 @@ class BmpMatrix:
         return self._msg
 
     def get_bmp_latency(self):
-        return time.time() - self._last_mtime
+        return time.time() - self._last_mtime if self._last_mtime is not None else None
 
 class StatusDisplay:
     def __init__(self, window_name, screen_width, screen_height):
@@ -153,6 +153,7 @@ if __name__ == '__main__':
                         'virtual frame buffer')
     parser.add_argument('--x_display_dim', type=str, help='WxH dimensions to configure for virtual '
                         'virtual frame buffer. Defaults to match LED display')
+    parser.add_argument('--hide_status', action='store_true', help='Do not show status GUI')
     args = parser.parse_args()
 
     # Figure display dimensions. The X display defaults to the same size as the LED display.
@@ -195,11 +196,24 @@ if __name__ == '__main__':
 
     print('Ctrl-C or close GUI window to exit')
     bmp_matrix = BmpMatrix(bmp_path, *led_display_dim)
-    status = StatusDisplay('WallE Status', 400, 500)
+    if not args.hide_status:
+        status = StatusDisplay('WallE', 400, 500)
     w = walle.WallE(num_rows=led_display_dim[0], num_cols=led_display_dim[1])
+
     convert_proc = None
+    prev_start = time.time()
+    cycle_times = []
+    exit_requested = False
     try:
-        while not status.is_exit_requested():
+        while not exit_requested:
+            start = time.time()
+            prev_cycle_time = start - prev_start
+            cycle_times.append(prev_cycle_time)
+            if len(cycle_times) >= 20:
+                print('cycle-time min={:.4f} max={:.4f} avg={:.4f}'.format(min(cycle_times), max(cycle_times),
+                        sum(cycle_times) / len(cycle_times)))
+                cycle_times = []
+
             matrix = bmp_matrix.get_matrix()
 
             # Now that the BMP for this cycle is locked in, request a new conversion. This will run
@@ -212,13 +226,19 @@ if __name__ == '__main__':
                                                 stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                                                 stderr=subprocess.DEVNULL)
 
-            status.update(matrix,
-                          'BMP staleness: {:.3f} ({})'.format(bmp_matrix.get_bmp_latency(),
-                                                              bmp_matrix.get_status()))
+            if not args.hide_status:
+                _ = bmp_matrix.get_bmp_latency()
+                bmp_latency = '{:.3f}'.format(_) if _ is not None else 'N/A'
+                status.update(matrix,
+                              'BMP staleness: {} ({})'.format(bmp_latency, bmp_matrix.get_status()))
+                exit_requested = status.is_exit_requested()
+              
             w.set(matrix)
 
             # Delay a bit to avoid pegging the core.
             time.sleep(0.02)
+            prev_start = start
+
     except KeyboardInterrupt:
         pass
 

@@ -13,7 +13,7 @@ def color8_to_walle_color(color):
 
     # Note: I think this could be improved by biasing up by 0.5 8-bit LSBs. This makes the
     # truncation more fair.
-    return walle.Color(*(ch / 255. for ch in color8bit))
+    return Color(*(ch / 255. for ch in color))
 
 def walle_color_to_color8(color):
     assert len(color) == 3
