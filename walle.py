@@ -1,6 +1,9 @@
 #!/usr/bin/python
 
+from collections import namedtuple
 import spidev
+
+Color = namedtuple('Color', ['r', 'g', 'b'])
 
 class Array:
   """
