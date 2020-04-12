@@ -18,7 +18,6 @@ class BmpMatrix:
         self._matrix = [[walle.Color(r=1, g=1, b=1)] * num_cols] * num_rows
         self._msg = 'uninitialized'
         self._last_mtime = None
-        self._last_update_time = time.time()
 
     def _8bit_color_to_walle_color(self, color8bit):
         assert len(color8bit) == 3
@@ -60,7 +59,6 @@ class BmpMatrix:
         self._matrix = [[self._8bit_color_to_walle_color(img.getpixel((col, row)))
                             for col in range(self._num_cols)]
                                 for row in range(self._num_rows)]
-        self._last_update_time = now
 
     def get_matrix(self):
         self._update_matrix()
@@ -69,8 +67,8 @@ class BmpMatrix:
     def get_status(self):
         return self._msg
 
-    def get_time_since_update(self):
-        return time.time() - self._last_update_time
+    def get_bmp_latency(self):
+        return time.time() - self._last_mtime
 
 class StatusDisplay:
     def __init__(self, window_name, screen_width, screen_height):
@@ -180,6 +178,8 @@ if __name__ == '__main__':
     frame_buffer_path = os.path.join(frame_buffer_dir, 'Xvfb_screen{}'.format(xvfb_screen))
     os.makedirs(frame_buffer_dir, exist_ok=True)
     print('Using FB: ', frame_buffer_path)
+    bmp_path = os.path.join(frame_buffer_dir, 'fb.bmp')
+    print('Using BMP: ', bmp_path)
 
     # Start virtual frame buffer server. -nocursor (X Server argument) avoids cursor arrow
     # artifacts. Inhibit all I/O to prevent console spam/blocking I/O if pipes fill. Wait for the
@@ -190,19 +190,7 @@ if __name__ == '__main__':
                                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL))
     report_subproc(procs[-1])
 
-    # Start periodic conversion of .xwd frame buffers to .bmp. Inhibit all I/O (same as above).
-    # Error messages aren't unexpected (e.g., frame buffer file might not yet exist).
-    #
-    # Note: Might be smart to make this synchronous with the main loop, actually.
-    bmp_path = os.path.join(frame_buffer_dir, 'fb.bmp')
-    procs.append(subprocess.Popen(['watch', '--interval=0.05', 'convert',
-                                     'xwd:' + frame_buffer_path, 'bmp:' + bmp_path],
-                                  stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                                  stderr=subprocess.DEVNULL))
-    report_subproc(procs[-1])
-    print('Using BMP: ', bmp_path)
-
-    # Wait a moment for processes to start. Then double-check they are not already exited.
+     # Wait a moment for processes to start. Then double-check they are not already exited.
     time.sleep(1)
     for proc in procs:
         if proc.poll() is not None:
@@ -217,14 +205,28 @@ if __name__ == '__main__':
     print('Ctrl-C or close GUI window to exit')
     bmp_matrix = BmpMatrix(bmp_path, *led_display_dim)
     status = StatusDisplay('WallE Status', 400, 500)
+    convert_proc = None
     try:
         while not status.is_exit_requested():
             matrix = bmp_matrix.get_matrix()
+
+            # Now that the BMP for this cycle is locked in, request a new conversion. This will run
+            # in the background and hopefully be done before the next cycle.
+            #
+            # Only start a new conversion if the previous one is finished.
+            if convert_proc is None or convert_proc.poll() is not None:
+                convert_proc = subprocess.Popen(['convert', 'xwd:' + frame_buffer_path,
+                                                 'bmp:' + bmp_path],
+                                                stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                                                stderr=subprocess.DEVNULL)
+
             status.update(matrix,
-                          'BMP staleness: {:.3f} ({})'.format(bmp_matrix.get_time_since_update(),
+                          'BMP staleness: {:.3f} ({})'.format(bmp_matrix.get_bmp_latency(),
                                                               bmp_matrix.get_status()),
                           'WallE not implemented')
-            time.sleep(0.01)
+
+            # Delay a bit to avoid pegging the core.
+            time.sleep(0.02)
     except KeyboardInterrupt:
         pass
 
