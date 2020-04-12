@@ -15,4 +15,5 @@ if __name__ == '__main__':
     assert valid(args.r) and valid(args.g) and valid(args.b)
 
     w = walle.WallE()
-    w.set([[walle.Color(r=args.r, g=args.g, b=args.b)] * w.get_num_cols()] * w.get_num_rows())
+    rows, cols = w.dim()
+    w.set([[walle.Color(r=args.r, g=args.g, b=args.b)] row _ in range(cols)] for _ in range(rows))

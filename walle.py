@@ -48,11 +48,8 @@ class WallE:
             matrix = self._gamma_corrected(matrix)
         self._spi.xfer(self._flatten(matrix))
 
-    def get_num_rows(self):
-        return self._num_rows
-
-    def get_num_cols(self):
-        return self._num_cols
+    def dim(self):
+        return (self._num_rows, self._num_cols)
 
     def all_off_matrix(self):
         # expected to return a copy

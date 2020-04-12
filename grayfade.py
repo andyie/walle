@@ -41,7 +41,8 @@ class Fader:
 
 if __name__ == '__main__':
     w = walle.WallE()
-    faders = [[Fader() for _ in w.get_num_cols()] for _ in w.get_num_rows()]
+    rows, cols = w.dim()
+    faders = [[Fader() for _ in cols] for _ in rows]
     while True:
         now = time.time()
         w.set([[f.get(now) for f in row] for row in faders])
