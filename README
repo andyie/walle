@@ -1,0 +1,8 @@
+Xvfb :1 -screen 0 100x100x24 -fbdir /tmp -nocursor 
+
+xwud -in /tmp/Xvfb_screen0
+
+convert xwd:/tmp/Xvfb_screen0 tmp/out.png
+
+# SDL_.. option actually not necessary, I think
+DISPLAY=:1 SDL_VIDEODRIVER=x11 ./bounce.py
