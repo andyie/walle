@@ -137,7 +137,7 @@ class LocalLedDisplay:
 
 class UdpLedDisplay:
     def __init__(self, host, port=DEFAULT_UDP_SERVER_PORT, num_rows=DEFAULT_NUM_ROWS,
-                 num_cols=DEFAULT_NUM_COLS, timeout=0.2):
+                 num_cols=DEFAULT_NUM_COLS, timeout=0.1):
         """
         relatively long timeout gives the servers's buffers a break if they are falling behind
         """
