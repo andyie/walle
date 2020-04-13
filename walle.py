@@ -2,6 +2,7 @@
 
 import argparse
 import copy
+import logging, logging.handlers
 import re
 import select
 import socket
@@ -13,6 +14,23 @@ DEFAULT_NUM_ROWS = 10
 DEFAULT_NUM_COLS = 10
 
 DEFAULT_UDP_SERVER_PORT = 4513
+
+log = logging.getLogger('walle')
+log.setLevel('INFO')
+_formatter = logging.Formatter("%(asctime)s:%(name)s:%(levelname)s: %(message)s")
+
+_log_console_handler = logging.StreamHandler()
+_log_console_handler.setLevel('INFO')
+_log_console_handler.setFormatter(_formatter)
+log.addHandler(_log_console_handler)
+
+LOG_FILE = '/tmp/walle.log'
+_log_file_handler = logging.handlers.RotatingFileHandler(LOG_FILE, mode='a', maxBytes=10*1024*1024,
+                                                         backupCount=2)
+_log_file_handler.setLevel('DEBUG')
+_log_file_handler.setFormatter(_formatter)
+log.addHandler(_log_file_handler)
+log.info('initializing logging: ' + LOG_FILE)
 
 def all_off_matrix(dim):
     # expected to return a copy
@@ -64,7 +82,7 @@ class LocalLedDisplay:
         250 KHz SPI should be sufficient to transfer 24 bits of information to 100 LEDs in ~0.01
         seconds. Some occasional glitching was observed on the real display at 1 MHz.
         """
-        print('using spi {}:{}'.format(bus, index))
+        log.info('using spi {}:{}'.format(bus, index))
         self._spi = spidev.SpiDev()
         self._spi.open(bus, index)
         self._spi.lsbfirst = False
@@ -112,7 +130,7 @@ class UdpLedDisplay:
         """
         relatively long timeout gives the servers's buffers a break if they are falling behind
         """
-        print('sending to server {}:{} with timeout {}'.format(host, port, timeout))
+        log.info('sending to server {}:{} with timeout {}'.format(host, port, timeout))
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self._host = host
         self._port = port
@@ -127,10 +145,10 @@ class UdpLedDisplay:
             self._set(matrix)
         except TimeoutError as e:
             self._num_consecutive_timeouts += 1
-            print('timeout:', str(e))
+            log.warning('timeout setting display: ' + str(e))
             max_consecutive_timeouts = 10
             if self._num_consecutive_timeouts > max_consecutive_timeouts:
-                print('got >{} timeouts in a row, raising exception'.format(
+                log.error('failing setting display after >{} timeouts in a row'.format(
                     max_consecutive_timeouts))
                 raise
         else:
@@ -217,27 +235,27 @@ class _UdpLedDisplayServer:
                 # should be skipped
                 data, client_addr = msg
                 if msg_found:
-                    print('skipping message from {}:{}'.format(*client_addr))
+                    log.info('skipping message from {}:{}'.format(*client_addr))
                     continue
 
                 # if unpacking the message fails, discard
                 try:
                     matrix, msg_id = _unpack_udp(msg)
                 except RuntimeError as e:
-                    print('discarding malformed message: {}'.format(e))
+                    log.warning('discarding malformed message: {}'.format(e))
                     continue
 
                 # if the dimensions are wrong, discard
                 dim = _get_dim(matrix)
                 if dim != driver.dim():
-                    print('discarded request with incorrect dimensions {}x{}'.format(*dim))
+                    log.warning('discarded request with incorrect dimensions {}x{}'.format(*dim))
                     continue
 
                 # set the new data to the display. if it times out, treat it the same as a discard
                 try:
                     driver.set(matrix)
                 except TimeoutError as e:
-                    print('setting the display timed out')
+                    log.error('timeout setting display: ' + str(e))
                     continue
 
                 # acknowledge the request, and signal the remaining messages to be skipped
@@ -253,5 +271,5 @@ if __name__ == '__main__':
 
     driver = create_display(args.target)
     server = _UdpLedDisplayServer(('', args.listen_port), driver)
-    print('listening on :{}'.format(args.listen_port))
+    log.info('listening on :{}'.format(args.listen_port))
     server.serve_forever()
