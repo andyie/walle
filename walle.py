@@ -6,7 +6,6 @@ import copy
 import re
 import select
 import socket
-import socketserver
 import spidev
 import struct
 import time
@@ -110,7 +109,10 @@ class LocalLedDisplay:
 
 class UdpLedDisplay:
     def __init__(self, host, port=DEFAULT_UDP_SERVER_PORT, num_rows=DEFAULT_NUM_ROWS,
-                 num_cols=DEFAULT_NUM_COLS, timeout=0.1):
+                 num_cols=DEFAULT_NUM_COLS, timeout=0.2):
+        """
+        relatively long timeout gives the servers's buffers a break if they are falling behind
+        """
         print('Using UDP server {}:{} with timeout {}'.format(host, port, timeout))
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self._host = host
@@ -204,8 +206,6 @@ class UdpLedDisplay:
 
 class _UdpHandler(socketserver.BaseRequestHandler):
     def handle(self):
-        print('received {} bytes from {}'.format(len(self.request[0]), self.client_address))
-
         # if unpacking the message fails, return
         try:
             matrix, msg_id = _unpack_udp(self.request[0])
@@ -230,14 +230,61 @@ class _UdpHandler(socketserver.BaseRequestHandler):
         ack = _pack_udp(driver.get(), msg_id)
         self.request[1].sendto(ack, self.client_address)
 
-class _UdpServer(socketserver.UDPServer):
+class _UdpLedDisplayServer:
     """
-    note: it's important this is not concurrent, because we do not want concurrent access to a
-    physical display
+    This was originally implemented as a synchronous socketserver.UDPServer, but became concerned
+    about requests backing up in OS buffers. This version only serves the most recent request in the
+    RX buffers.
     """
     def __init__(self, host_port, driver):
-        super().__init__(host_port, _UdpHandler)
-        self.driver = driver
+        self._driver = driver
+        self._socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self._socket.bind(host_port)
+
+    def serve_forever():
+        while True:
+            # wait for the socket to have pending data, then poll for all pending messages.
+            readers, _ _ = select.select([self._socket], [], [])
+            msgs = []
+            while self._socket in readers:
+                msgs.append(self._socket.recvfrom(4096))
+                readers, _ _ = select.select([self._socket], [], [], 0)
+            assert not readers
+
+            # process messages back-to-front until a valid one is found.
+            msg_found = False
+            for msg in reversed(msgs):
+                # if a message has already been processed, then the rest of the (earlier) messages
+                # should be skipped
+                data, client_addr = msg
+                if msg_found:
+                    print('skipping message from {}:{}'.format(*client_addr))
+                    continue
+
+                # if unpacking the message fails, discard
+                try:
+                    matrix, msg_id = _unpack_udp(msg)
+                except RuntimeError as e:
+                    print('discarding malformed message: {}'.format(e))
+                    continue
+
+                # if the dimensions are wrong, discard
+                dim = _get_dim(matrix)
+                if dim != driver.dim():
+                    print('discarded request with incorrect dimensions {}x{}'.format(*dim))
+                    continue
+
+                # set the new data to the display. if it times out, treat it the same as a discard
+                try:
+                    driver.set(matrix)
+                except TimeoutError as e:
+                    print('setting the display timed out')
+                    continue
+
+                # acknowledge the request, and signal the remaining messages to be skipped
+                ack = _pack_udp(self.driver.get(), msg_id)
+                self._socket.sendto(ack, client_addr)
+                msg_found = True
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -246,6 +293,6 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     driver = create_display(args.target)
-    server = _UdpServer(('', args.listen_port), driver)
+    server = UdpLedDisplayServer(('', args.listen_port), driver)
     print('Listening on :{}'.format(server.server_address[1]))
     server.serve_forever()
