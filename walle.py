@@ -45,9 +45,9 @@ def _get_dim(matrix):
     assert len(set(len(row) for row in matrix)) == 1
     return len(matrix), len(matrix[0])
 
-def _pack_udp(matrix, msg_id):
+def _pack_udp(matrix, msg_seq):
     # Verify all rows are the same size
-    header = struct.pack('>I', msg_id)
+    header = struct.pack('>I', msg_seq)
     if matrix is not None:
         num_rows, num_cols = _get_dim(matrix)
         chs = (ch for row in matrix for color in row for ch in color)
@@ -61,7 +61,7 @@ def _unpack_udp(data):
     if len(data) != 4 and len(data) < 12:
         raise RuntimeError('invalid packet size {}'.format(len(data)))
     header, payload = data[:4], data[4:]
-    msg_id = struct.unpack('>I', header)[0]
+    msg_seq = struct.unpack('>I', header)[0]
     if len(payload):
         if len(payload) % 4 != 0:
             raise RuntimeError('invalid packet size {}'.format(len(data)))
@@ -79,7 +79,7 @@ def _unpack_udp(data):
         matrix = [colors[i:i + num_cols] for i in range(0, len(colors), num_cols)]
     else:
         matrix = None
-    return matrix, msg_id
+    return matrix, msg_seq
 
 def create_display(target):
     if target == 'spi':
@@ -147,7 +147,7 @@ class UdpLedDisplay:
         self._port = port
         self._dim = (num_rows, num_cols)
         self._timeout = timeout
-        self._msg_id = 0
+        self._msg_seq = 0
         self._num_consecutive_timeouts = 0
         self._num_total_timeouts = 0
 
@@ -196,9 +196,9 @@ class UdpLedDisplay:
         assert _get_dim(matrix) == self._dim
 
         # Send the data
-        tx_msg_id =  self._msg_id
-        self._msg_id = (self._msg_id + 1) % 2**32
-        tx = _pack_udp(matrix, tx_msg_id)
+        tx_msg_seq =  self._msg_seq
+        self._msg_seq = (self._msg_seq + 1) % 2**32
+        tx = _pack_udp(matrix, tx_msg_seq)
         self.socket.sendto(tx, (self._host, self._port))
 
         # Wait for the acknowledgement
@@ -210,13 +210,13 @@ class UdpLedDisplay:
             if self.socket in readers:
                 rx, _ = self.socket.recvfrom(4096) # should return immediately
                 try:
-                    rx_matrix, rx_msg_id = _unpack_udp(rx)
+                    rx_matrix, rx_msg_seq = _unpack_udp(rx)
                 except RuntimeError as e:
                     pass
                 else:
                     # if message ID does not match, ignore this message. but if dimensions don't
                     # match, that's an error. it's overkill to verify contents.
-                    if rx_msg_id == tx_msg_id:
+                    if rx_msg_seq == tx_msg_seq:
                         rx_dim = _get_dim(rx_matrix)
                         if rx_dim != self._dim:
                             raise RuntimeError('Remote display has unexpected dimensions '
@@ -226,7 +226,7 @@ class UdpLedDisplay:
 
         # if we didn't get an ACK, throw TimeoutError
         if not acked:
-            raise TimeoutError('did not receive ack for msg id {}'.format(tx_msg_id))
+            raise TimeoutError('did not receive ack for msg {}'.format(tx_msg_seq))
 
     def get(self):
         """
@@ -249,6 +249,7 @@ class _UdpLedDisplayServer:
         self._socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self._socket.bind(host_port)
         self._last_client = None
+        self._last_msg_seq = None
 
     def serve_forever(self):
         while True:
@@ -272,7 +273,7 @@ class _UdpLedDisplayServer:
 
                 # if unpacking the message fails, discard
                 try:
-                    matrix, msg_id = _unpack_udp(data)
+                    matrix, msg_seq = _unpack_udp(data)
                 except RuntimeError as e:
                     log.warning('{}:{} request malformed: {}'.format(*client_addr, e))
                     continue
@@ -288,6 +289,13 @@ class _UdpLedDisplayServer:
                 if self._last_client != client_addr:
                     log.info('new client {}:{}'.format(*client_addr))
                     self._last_client = client_addr
+                    self._last_msg_seq = None
+
+                # detect missing messages (for fun)
+                if self._last_msg_seq is not None and msg_seq != (self._last_msg_seq + 1) % 2**32:
+                    log.warning('{}:{} requests missing between {} and {}'.format(*client_addr,
+                            self._last_msg_seq, msg_seq))
+                self._last_msg_seq = msg_seq
 
                 # set the new data to the display. if it times out, treat it the same as a discard
                 try:
@@ -297,7 +305,7 @@ class _UdpLedDisplayServer:
                     continue
 
                 # acknowledge the request, and signal the remaining messages to be skipped
-                ack = _pack_udp(self._driver.get(), msg_id)
+                ack = _pack_udp(self._driver.get(), msg_seq)
                 self._socket.sendto(ack, client_addr)
                 msg_found = True
 
