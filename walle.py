@@ -47,27 +47,38 @@ def _get_dim(matrix):
 
 def _pack_udp(matrix, msg_id):
     # Verify all rows are the same size
-    num_rows, num_cols = _get_dim(matrix)
-    chs = (ch for row in matrix for color in row for ch in color)
-    data = struct.pack('>III{}f'.format(3 * num_rows * num_cols), msg_id, num_rows, num_cols, *chs)
-    assert len(data) == 12 + 4 * 3 * num_rows * num_cols
-    return data
+    header = struct.pack('>I', msg_id)
+    if matrix is not None:
+        num_rows, num_cols = _get_dim(matrix)
+        chs = (ch for row in matrix for color in row for ch in color)
+        payload = struct.pack('>II{}f'.format(3 * num_rows * num_cols), num_rows, num_cols, *chs)
+        assert len(payload) == 8 + 4 * 3 * num_rows * num_cols
+    else:
+        payload = bytes()
+    return header + payload
 
 def _unpack_udp(data):
-    num_chs = int((len(data) - 3 * 4) / 4) # if there's truncation here, it will show up in unpack()
-    if num_chs <= 0:
+    if len(data) != 4 and len(data) < 12:
         raise RuntimeError('invalid packet size {}'.format(len(data)))
-    try:
-        msg_id, num_rows, num_cols, *chs = struct.unpack('>III{}f'.format(num_chs), data)
-    except struct.error as e:
-        raise RuntimeError(str(e))
-    if num_chs != 3 * num_rows * num_cols:
-        raise RuntimeError('received dimensions {}x{} do not match channel count'.format(
-            num_rows, num_cols, num_chs))
-    if min(chs) < 0 or max(chs) > 1.0:
-        raise RuntimeError('received channels contain values out of bounds')
-    colors = [tuple(chs[i:i + 3]) for i in range(0, len(chs), 3)]
-    matrix = [colors[i:i + num_cols] for i in range(0, len(colors), num_cols)]
+    header, payload = data[:4], data[4:]
+    msg_id = struct.unpack('>I', header)[0]
+    if len(payload):
+        if len(payload) % 4 != 0:
+            raise RuntimeError('invalid packet size {}'.format(len(data)))
+        num_chs = int((len(payload) - 8) / 4) # truncation will be detected by struct.unpack
+        try:
+            num_rows, num_cols, *chs = struct.unpack('>II{}f'.format(num_chs), payload)
+        except struct.error as e:
+            raise RuntimeError(str(e))
+        if num_chs != 3 * num_rows * num_cols:
+            raise RuntimeError('received dimensions {}x{} do not match channel count'.format(
+                num_rows, num_cols, num_chs))
+        if min(chs) < 0 or max(chs) > 1.0:
+            raise RuntimeError('received channels contain values out of bounds')
+        colors = [tuple(chs[i:i + 3]) for i in range(0, len(chs), 3)]
+        matrix = [colors[i:i + num_cols] for i in range(0, len(colors), num_cols)]
+    else:
+        matrix = None
     return matrix, msg_id
 
 def create_display(target):
