@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import argparse
+from contextlib import contextmanager
 import copy
 import logging, logging.handlers
 import re
@@ -43,6 +44,12 @@ class Profiler:
         self._max_t = None
         self._min_t = None
         self._num_samples = 0
+
+    @contextmanager
+    def measure(self):
+        self.start()
+        yield
+        self.stop()
 
     def start(self):
         assert self._start_t is None
@@ -189,21 +196,20 @@ class UdpLedDisplay:
 
     def set(self, matrix):
         # swallow timeouts unless too many have occurred in a row
-        self._set_profiler.start()
-        try:
-            self._set(matrix)
-        except TimeoutError as e:
-            self._num_total_timeouts += 1
-            self._num_consecutive_timeouts += 1
-            log.warning('timeout setting display: {}'.format(e))
-            max_consecutive_timeouts = 10
-            if self._num_consecutive_timeouts > max_consecutive_timeouts:
-                log.error('failing setting display after >{} timeouts in a row'.format(
-                    max_consecutive_timeouts))
-                raise
-        else:
-            self._num_consecutive_timeouts = 0
-        self._set_profiler.stop()
+        with self._set_profiler.measure():
+            try:
+                self._set(matrix)
+            except TimeoutError as e:
+                self._num_total_timeouts += 1
+                self._num_consecutive_timeouts += 1
+                log.warning('timeout setting display: {}'.format(e))
+                max_consecutive_timeouts = 10
+                if self._num_consecutive_timeouts > max_consecutive_timeouts:
+                    log.error('failing setting display after >{} timeouts in a row'.format(
+                        max_consecutive_timeouts))
+                    raise
+            else:
+                self._num_consecutive_timeouts = 0
 
     def _set(self, matrix):
         """
