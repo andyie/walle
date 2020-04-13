@@ -217,6 +217,7 @@ class _UdpLedDisplayServer:
         self._driver = driver
         self._socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self._socket.bind(host_port)
+        self._last_client = None
 
     def serve_forever(self):
         while True:
@@ -235,31 +236,37 @@ class _UdpLedDisplayServer:
                 # should be skipped
                 data, client_addr = msg
                 if msg_found:
-                    log.info('skipping message from {}:{}'.format(*client_addr))
+                    log.info('{}:{} request skipped'.format(*client_addr))
                     continue
 
                 # if unpacking the message fails, discard
                 try:
-                    matrix, msg_id = _unpack_udp(msg)
+                    matrix, msg_id = _unpack_udp(data)
                 except RuntimeError as e:
-                    log.warning('discarding malformed message: {}'.format(e))
+                    log.warning('{}:{} request malformed: {}'.format(*client_addr, e))
                     continue
 
                 # if the dimensions are wrong, discard
                 dim = _get_dim(matrix)
                 if dim != driver.dim():
-                    log.warning('discarded request with incorrect dimensions {}x{}'.format(*dim))
+                    log.warning('{}:{} request has bad dimensions {}x{}'.format(
+                        *client_addr, *dim))
                     continue
+
+                # record the new client
+                if self._last_client != client_addr:
+                    log.info('new client {}:{}'.format(*client_addr))
+                    self._last_client = client_addr
 
                 # set the new data to the display. if it times out, treat it the same as a discard
                 try:
                     driver.set(matrix)
                 except TimeoutError as e:
-                    log.error('timeout setting display: ' + str(e))
+                    log.error('{}:{} request timeout setting display: {}'.format(*client_addr, e))
                     continue
 
                 # acknowledge the request, and signal the remaining messages to be skipped
-                ack = _pack_udp(self.driver.get(), msg_id)
+                ack = _pack_udp(self._driver.get(), msg_id)
                 self._socket.sendto(ack, client_addr)
                 msg_found = True
 
