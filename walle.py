@@ -149,12 +149,19 @@ class UdpLedDisplay:
         self._timeout = timeout
         self._msg_id = 0
         self._num_consecutive_timeouts = 0
+        self._num_total_timeouts = 0
+
+        self._min_max_samples = 0
+        self._min_set = None
+        self._max_set = None
 
     def set(self, matrix):
         # swallow timeouts unless too many have occurred in a row
+        start = time.perf_counter()
         try:
             self._set(matrix)
         except TimeoutError as e:
+            self._num_total_timeouts += 1
             self._num_consecutive_timeouts += 1
             log.warning('timeout setting display: ' + str(e))
             max_consecutive_timeouts = 10
@@ -164,6 +171,19 @@ class UdpLedDisplay:
                 raise
         else:
             self._num_consecutive_timeouts = 0
+        stop = time.perf_counter()
+        latency = stop - start
+
+        self._min_set = min(latency, self._max_set or latency)
+        self._max_set = max(latency, self._max_set or latency)
+        self._min_max_samples += 1
+        sample_period = 100
+        if self._min_max_samples >= sample_period:
+            log.info('latency min={:.3f}s max={:.3f}s, total timeouts={}'.format(
+                self._min_set, self._max_set, self._num_total_timeouts))
+            self._min_set = None
+            self._max_set = None
+            self._min_max_samples = 0
 
     def _set(self, matrix):
         """
