@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import argparse
 import math
 import numpy
 import random
@@ -40,7 +41,11 @@ class Fader:
         return max(random.uniform(-2, 1), 0)
 
 if __name__ == '__main__':
-    driver = walle.LocalLedDisplay()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('target', type=str, help='The display to connect to')
+    args = parser.parse_args()
+
+    driver = walle.create_display(args.target)
     rows, cols = driver.dim()
     faders = [[Fader() for _ in range(cols)] for _ in range(rows)]
     while True:

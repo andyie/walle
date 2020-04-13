@@ -1,11 +1,16 @@
 #!/usr/bin/env python
 
+import argparse
 import walle
 import time
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('target', type=str, help='The display to connect to')
+    args = parser.parse_args()
+
     print('Should shine each color left-to-right in sequence for each row top-to-bottom')
-    driver = walle.LocalLedDisplay()
+    driver = walle.create_display(args.target)
     while True:
         rows, cols = driver.dim()
         for row in range(rows):

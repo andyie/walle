@@ -110,17 +110,46 @@ class LocalLedDisplay:
 
 class UdpLedDisplay:
     def __init__(self, host, port=DEFAULT_UDP_SERVER_PORT, num_rows=DEFAULT_NUM_ROWS,
-                 num_cols=DEFAULT_NUM_COLS, timeout=1.0):
+                 num_cols=DEFAULT_NUM_COLS, timeout=0.1):
         print('Using UDP server {}:{} with timeout {}'.format(host, port, timeout))
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self._host = host
         self._port = port
         self._dim = (num_rows, num_cols)
         self._timeout = timeout
-        self._num_timeouts = 0
         self._msg_id = 0
 
+        # track past outcomes for timeout tracking
+        self._recent_failures = collections.deque()
+        self._num_recent_failures = 0
+
     def set(self, matrix):
+        # catch specifically timeouts for later
+        failed = False
+        try:
+            self._set(matrix)
+        except TimeoutError:
+            failed = True
+            print('timeout!')
+
+        # record the new outcome. if the recent outcome history has grown long enough, start
+        # retiring old history. keep the memo'd count up to date.
+        self._recent_failures.append(failed)
+        self._num_recent_failures += failed
+        while len(self._recent_failures) > 1000:
+            self._num_recent_failures -= self._recent_failures[0]
+            self._recent_failures.popleft()
+        assert self._num_recent_failures >= 0
+
+        # if the number of timeouts is too high now, re-raise the timeout. otherwise, the timeout is
+        # just swallowed
+        max_recent_timeouts = 10
+        if self._num_recent_failures > max_recent_timeouts:
+            print('too many timeouts!')
+            raise TimeoutError('Too many timeouts ({} in last {} transactions)'.format(
+                self._num_recent_failures, len(self._recent_failures)))
+
+    def _set(self, matrix):
         """
         Idea here is that after set() returns, the display has observed the update. This keeps
         semantics with direct driver set(), naturally throttles calls to set(), provides an answer
