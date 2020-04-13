@@ -11,3 +11,8 @@ package notes:
 * python-pygame (required for SDL dependencies)
 * xvfb (raspbian: xvfb; arch: xorg-xvfb-server)
 * imagemagick
+
+some notes on python color libraries:
+* palette hasn't changed in ~10 years and does not support python 3
+* colour does not natively support 8-bit scaled colors
+* python-colormath has a separate type for each color representation

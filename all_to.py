@@ -16,5 +16,5 @@ if __name__ == '__main__':
 
     driver = walle.LedDisplayDriver()
     rows, cols = driver.dim()
-    driver.set([[walle.Color(r=args.r, g=args.g, b=args.b)] row _ in range(cols)]
-                    for _ in range(rows))
+    driver.set([[(args.r, args.g, args.b) for _ in range(cols)]
+                    for _ in range(rows)])

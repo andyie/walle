@@ -15,7 +15,7 @@ class BmpMatrix:
         self._bmp_file = bmp_file
         self._num_rows = num_rows
         self._num_cols = num_cols
-        self._matrix = [[walle.Color(r=0, g=0, b=0)] * num_cols] * num_rows
+        self._matrix = walle.all_off_matrix((num_rows, num_cols))
         self._msg = 'uninitialized'
         self._last_mtime = None
 
@@ -51,7 +51,7 @@ class BmpMatrix:
             img = img.resize((self._num_cols, self._num_rows), resample=Image.LANCZOS)
         
         # update the matrix
-        self._matrix = [[walle.color8_to_walle_color(img.getpixel((col, row)))
+        self._matrix = [[tuple(ch / 255. for ch in img.getpixel((col, row)))
                             for col in range(self._num_cols)]
                                 for row in range(self._num_rows)]
 
@@ -98,7 +98,8 @@ class StatusDisplay:
         # draw cells. let each cell own a small border as part of itself
         for row in range(num_rows):
             for col in range(num_cols):
-                color = walle.walle_color_to_color8(matrix[row][col])
+                # there is some conversion error here, but good enough for a display
+                color = (int(ch * 255) for ch in color)
                 rect = (col * cell_length, row * cell_length, cell_length, cell_length)
                 pygame.draw.rect(self._screen, color, rect, 0)
 

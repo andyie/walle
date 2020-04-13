@@ -30,7 +30,7 @@ class Fader:
 
         # interpolate
         v = numpy.interp([now], [self._t0, self._t1], [self._v0, self._v1])[0]
-        return walle.Color(r=v, g=v, b=v)
+        return (v, v, v)
         
     def _random_t(self):
         return random.uniform(1, 3)
