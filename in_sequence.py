@@ -5,7 +5,7 @@ import time
 
 if __name__ == '__main__':
     print('Should shine each color left-to-right in sequence for each row top-to-bottom')
-    driver = walle.LedDisplayDriver()
+    driver = walle.LocalLedDisplay()
     while True:
         rows, cols = driver.dim()
         for row in range(rows):

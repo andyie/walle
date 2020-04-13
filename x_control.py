@@ -198,8 +198,8 @@ if __name__ == '__main__':
     print('Ctrl-C or close GUI window to exit')
     bmp_matrix = BmpMatrix(bmp_path, *led_display_dim)
     if not args.hide_status:
-        status = StatusDisplay('LedDisplayDriver', 400, 500)
-    driver = walle.LedDisplayDriver(num_rows=led_display_dim[0], num_cols=led_display_dim[1])
+        status = StatusDisplay('LocalLedDisplay', 400, 500)
+    driver = walle.LocalLedDisplay(num_rows=led_display_dim[0], num_cols=led_display_dim[1])
 
     convert_proc = None
     prev_start = time.time()

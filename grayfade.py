@@ -40,7 +40,7 @@ class Fader:
         return max(random.uniform(-2, 1), 0)
 
 if __name__ == '__main__':
-    driver = walle.LedDisplayDriver()
+    driver = walle.LocalLedDisplay()
     rows, cols = driver.dim()
     faders = [[Fader() for _ in range(cols)] for _ in range(rows)]
     while True:
