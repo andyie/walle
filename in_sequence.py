@@ -9,8 +9,8 @@ if __name__ == '__main__':
     parser.add_argument('target', type=str, help='The display to connect to')
     args = parser.parse_args()
 
-    walle.log.info('should shine each color for each led left-to-right for each row top-to-bottom')
     driver = walle.create_display(args.target)
+    walle.log.info('should shine each color for each led left-to-right for each row top-to-bottom')
     while True:
         rows, cols = driver.dim()
         for row in range(rows):

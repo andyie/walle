@@ -32,6 +32,37 @@ _log_file_handler.setFormatter(_formatter)
 log.addHandler(_log_file_handler)
 log.info('initializing logging: ' + LOG_FILE)
 
+class Profiler:
+    def __init__(self, name, logger, sample_period=100):
+        self._name = name
+        self._logger = logger
+        assert sample_period > 0
+        self._sample_period = sample_period
+
+        self._start_t = None
+        self._max_t = None
+        self._min_t = None
+        self._num_samples = 0
+
+    def start(self):
+        assert self._start_t is None
+        self._start_t = time.perf_counter()
+
+    def stop(self):
+        assert self._start_t is not None
+        interval_t = time.perf_counter() - self._start_t
+        self._start_t = None
+
+        self._min_t = min(interval_t, self._max_t or interval_t)
+        self._max_t = max(interval_t, self._max_t or interval_t)
+        self._num_samples += 1
+        if self._num_samples >= self._sample_period:
+            self._logger.info('{} time min={:.3f}s max={:.3f}s'.format(self._name, self._min_t,
+                                                                       self._max_t))
+            self._min_t = None
+            self._max_t = None
+            self._num_samples = 0
+
 def all_off_matrix(dim):
     # expected to return a copy
     return [[(0., 0., 0.) for _ in range(dim[0])] for _ in range(dim[1])]
@@ -151,19 +182,20 @@ class UdpLedDisplay:
         self._num_consecutive_timeouts = 0
         self._num_total_timeouts = 0
 
-        self._min_max_samples = 0
-        self._min_set = None
-        self._max_set = None
+        self._set_profiler = Profiler('display update', log)
+
+    def dim(self):
+        return tuple(self._dim)
 
     def set(self, matrix):
         # swallow timeouts unless too many have occurred in a row
-        start = time.perf_counter()
+        self._set_profiler.start()
         try:
             self._set(matrix)
         except TimeoutError as e:
             self._num_total_timeouts += 1
             self._num_consecutive_timeouts += 1
-            log.warning('timeout setting display: ' + str(e))
+            log.warning('timeout setting display: {}'.format(e))
             max_consecutive_timeouts = 10
             if self._num_consecutive_timeouts > max_consecutive_timeouts:
                 log.error('failing setting display after >{} timeouts in a row'.format(
@@ -171,19 +203,7 @@ class UdpLedDisplay:
                 raise
         else:
             self._num_consecutive_timeouts = 0
-        stop = time.perf_counter()
-        latency = stop - start
-
-        self._min_set = min(latency, self._max_set or latency)
-        self._max_set = max(latency, self._max_set or latency)
-        self._min_max_samples += 1
-        sample_period = 100
-        if self._min_max_samples >= sample_period:
-            log.info('latency min={:.3f}s max={:.3f}s, total timeouts={}'.format(
-                self._min_set, self._max_set, self._num_total_timeouts))
-            self._min_set = None
-            self._max_set = None
-            self._min_max_samples = 0
+        self._set_profiler.stop()
 
     def _set(self, matrix):
         """
@@ -234,9 +254,6 @@ class UdpLedDisplay:
         above.
         """
         raise RuntimeError('not implemented')
-
-    def dim(self):
-        return tuple(self._dim)
 
 class _UdpLedDisplayServer:
     """
