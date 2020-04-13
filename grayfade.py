@@ -42,7 +42,7 @@ class Fader:
 if __name__ == '__main__':
     driver = walle.LedDisplayDriver()
     rows, cols = driver.dim()
-    faders = [[Fader() for _ in cols] for _ in rows]
+    faders = [[Fader() for _ in range(cols)] for _ in range(rows)]
     while True:
         now = time.time()
         driver.set([[f.get(now) for f in row] for row in faders])

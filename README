@@ -11,6 +11,7 @@ package notes:
 * python-pygame (required for SDL dependencies)
 * xvfb (raspbian: xvfb; arch: xorg-xvfb-server)
 * imagemagick
+* numpy on RaspberryPi had .so dependency requiring libatlas-base-dev to be installed
 
 some notes on python color libraries:
 * palette hasn't changed in ~10 years and does not support python 3

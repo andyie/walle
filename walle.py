@@ -30,7 +30,7 @@ class LedDisplayDriver:
         self._num_cols = num_cols
 
         self._current_matrix = None
-        self.set(self.all_off_matrix())
+        self.set(all_off_matrix(self.dim()))
 
     def set(self, matrix):
         # note: it's important that _current_matrix becomes a copy here
@@ -57,8 +57,8 @@ class LedDisplayDriver:
         assert all(ch >= 0 and ch <= 1.0 for ch in flattened_rgb)
         flattened_rgb8 = [min(int(ch * 256), 255) for ch in flattened_rgb]
 
-        assert len(flattened_colors) == 3 * self._num_rows * self._num_cols
-        return flattened_colors
+        assert len(flattened_rgb8) == 3 * self._num_rows * self._num_cols
+        return flattened_rgb8
 
 class _UdpHandler(socketserver.BaseRequestHandler):
     def handle(self):
