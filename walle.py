@@ -232,28 +232,26 @@ class UdpLedDisplay:
         tx = _pack_udp(matrix, tx_msg_seq)
         self.socket.sendto(tx, (self._host, self._port))
 
-        # wait for the acknowledgement
-        start = time.time()
-        time_left = self._timeout
-        acked = False
-        while time_left >= 0 and not acked:
+        # wait for acknowledgement
+        start_t = time.time()
+        readers, _, _ = select.select([self.socket], [], [], self._timeout)
+        while self.socket in readers:
+            rx, _ = self.socket.recvfrom(4096) # should return immediately
+            try:
+                # the request is considered acknowledged if the sequence numbers match. don't
+                # bother verifying dimensions or contents, this may not apply (e.g., if this is
+                # query-only)
+                rx_matrix, rx_msg_seq = _unpack_udp(rx)
+                if rx_msg_seq == tx_msg_seq:
+                    return rx_matrix
+            except RuntimeError as e:
+                pass
+            time_left = self._timeout - (time.time() - start_t)
             readers, _, _ = select.select([self.socket], [], [], time_left)
-            if self.socket in readers:
-                rx, _ = self.socket.recvfrom(4096) # should return immediately
-                try:
-                    rx_matrix, rx_msg_seq = _unpack_udp(rx)
-                except RuntimeError as e:
-                    pass
-                else:
-                    # the request is considered acknowledged if the sequence numbers match. don't
-                    # bother verifying dimensions or contents, this may not apply (e.g., if this is
-                    # query-only)
-                    acked = (rx_msg_seq == tx_msg_seq)
-            time_left = self._timeout - (time.time() - start)
+        assert not readers
 
-        # if we didn't get an ACK, throw TimeoutError
-        if not acked:
-            raise TimeoutError('did not receive ack for msg {}'.format(tx_msg_seq))
+        # no acknowledgement in time
+        raise TimeoutError('ack timeout for msg {}'.format(tx_msg_seq))
 
 class _UdpLedDisplayServer:
     """
