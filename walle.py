@@ -260,69 +260,83 @@ class _UdpLedDisplayServer:
         self._select_profiler = Profiler('select wait', log)
         self._request_profiler = Profiler('request handling', log)
 
+    def _parse_request_data(self, data):
+        # parse the request and validate the matrix, if present
+        matrix, msg_seq = _unpack_udp(data)
+        if matrix:
+            dim = _get_dim(matrix)
+            if dim != self._driver.dim():
+                raise RuntimeError('incorrect dimensions {}x{}'.format(*dim))
+        return (matrix, msg_seq)
+
+    def _process_requests(self):
+        # parse all pending requests, keeping track of the last one that actually requests a display
+        # update
+        requests = []
+        num_recv = 0
+        last_update_request = None
+        while num_recv < 10:
+            # break out if there are no more pending messages
+            readers, _, _ = select.select([self._socket], [], [], 0)
+            if not readers:
+                break
+
+            # receive and parse the pending message
+            (data, client_addr) = self._socket.recvfrom(4096)
+            num_recv += 1
+            try:
+                matrix, msg_seq = self._parse_request_data(data)
+                request = (client_addr, matrix, msg_seq)
+                requests.append(request)
+                if matrix:
+                    last_update_request = request
+            except RuntimeError as e:
+                log.warning('{}:{} request malformed: {}'.format(*client_addr, e))
+
+        # acknowledge all requests, but only actuate the last update request as an optimization
+        for request in requests:
+            client_addr, matrix, msg_seq = request
+
+            # perform processing for requests containing a matrix
+            if matrix:
+                # record any new client sending display updates. I guess this could cause some spam
+                # if there are lots of client changes...
+                if self._last_update_client != client_addr:
+                    log.info('new update client {}:{}'.format(*client_addr))
+                    self._last_update_client = client_addr
+                    self._last_update_msg_seq = None
+
+                # detect missing messages (for fun)
+                if self._last_update_msg_seq is not None and \
+                   msg_seq != (self._last_update_msg_seq + 1) % 2**32:
+                    log.warning('{}:{} requests missing between {} and {}'.format(*client_addr,
+                            self._last_update_msg_seq, msg_seq))
+                self._last_update_msg_seq = msg_seq
+
+                # if this request is the freshest update request in the queue, actuate it.
+                # otherwise, log that the message was skipped
+                if request is last_update_request:
+                    try:
+                        self._driver.set(matrix)
+                    except TimeoutError as e:
+                        # TODO: can delete this timeout after we make set() asynchronous
+                        # also, note that we will acknowledge this request even though it timed
+                        # out, which is weird
+                        log.error('{}:{} request timeout setting display: {}'.format(*client_addr, e))
+                else:
+                    log.warning('{}:{} request skipped'.format(*client_addr))
+
+            # all valid requests are acknowledged
+            ack = _pack_udp(self._driver.get(), msg_seq)
+            self._socket.sendto(ack, client_addr)
+
     def serve_forever(self):
         while True:
-            # wait for the socket to have pending data, then poll for all pending messages.
+            # wait for the socket to have pending data, then process the pending requests
             with self._select_profiler.measure():
                 readers, _, _ = select.select([self._socket], [], [])
-            self._request_profiler.start()
-            msgs = []
-            while self._socket in readers:
-                msgs.append(self._socket.recvfrom(4096))
-                readers, _, _ = select.select([self._socket], [], [], 0)
-            assert not readers
-
-            # process messages back-to-front so that the most recent request to set the display
-            display_updated = False
-            for data, client_addr in reversed(msgs):
-                # if unpacking the request fails, discard it
-                try:
-                    matrix, msg_seq = _unpack_udp(data)
-                except RuntimeError as e:
-                    log.warning('{}:{} request malformed: {}'.format(*client_addr, e))
-                    continue
-
-                # display update steps are only run if a matrix was sent with the request
-                if matrix is not None:
-                    # skip setting the display if there was a more recent update request. this will
-                    # appear as a timeout to the client. I suppose we could acknowledge these too
-                    if display_updated:
-                        log.warning('{}:{} request skipped'.format(*client_addr))
-                        continue
-
-                    # if the dimensions are wrong, discard
-                    dim = _get_dim(matrix)
-                    if dim != driver.dim():
-                        log.warning('{}:{} request has bad dimensions {}x{}'.format(
-                            *client_addr, *dim))
-                        continue
-
-                    # record the new client
-                    if self._last_update_client != client_addr:
-                        log.info('new client {}:{}'.format(*client_addr))
-                        self._last_update_client = client_addr
-                        self._last_update_msg_seq = None
-
-                    # detect missing messages (for fun)
-                    if self._last_update_msg_seq is not None and \
-                       msg_seq != (self._last_update_msg_seq + 1) % 2**32:
-                        log.warning('{}:{} requests missing between {} and {}'.format(*client_addr,
-                                self._last_update_msg_seq, msg_seq))
-                    self._last_update_msg_seq = msg_seq
-
-                    # set the new data to the display. if it times out, treat it the same as a
-                    # discard. then mark the display as updated this cycle.
-                    try:
-                        driver.set(matrix)
-                    except TimeoutError as e:
-                        log.error('{}:{} request timeout setting display: {}'.format(*client_addr, e))
-                        continue
-                    display_updated = True
-
-                # acknowledge the request, and signal the remaining messages to be skipped
-                ack = _pack_udp(self._driver.get(), msg_seq)
-                self._socket.sendto(ack, client_addr)
-            self._request_profiler.stop()
+            with self._request_profiler.measure():
+                self._process_requests()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
