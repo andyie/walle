@@ -22,12 +22,10 @@ class StatusDisplay:
                     if event.type == pygame.QUIT:
                         done = True
 
-                # update the display
+                # update the display if a new matrix is available
                 matrix = self._driver.get()
                 if matrix:
                     self._display_matrix(matrix)
-                else:
-                    walle.log.warning('could not get display')
 
                 time.sleep(0.05)
 
