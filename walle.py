@@ -138,6 +138,8 @@ class LocalLedDisplay:
         self._spi.max_speed_hz = sclk_hz
         self._spi.mode = 0b00
 
+        self._spi_xfer_profiler = Profiler('spi xfer', log)
+
         self._dim = (num_rows, num_cols)
 
         self._current_matrix = None
@@ -148,7 +150,8 @@ class LocalLedDisplay:
         # correction.
         assert _get_dim(matrix) == self._dim
         self._current_matrix = copy.deepcopy(matrix)
-        self._spi.xfer(self._flatten(self._gamma_corrected(matrix)))
+        with self._spi_xfer_profiler.measure():
+            self._spi.xfer(self._flatten(self._gamma_corrected(matrix)))
 
     def get(self):
         return self._current_matrix
@@ -254,11 +257,15 @@ class _UdpLedDisplayServer:
         self._socket.bind(host_port)
         self._last_update_client = None
         self._last_update_msg_seq = None
+        self._select_profiler = Profiler('select wait', log)
+        self._request_profiler = Profiler('request handling', log)
 
     def serve_forever(self):
         while True:
             # wait for the socket to have pending data, then poll for all pending messages.
-            readers, _, _ = select.select([self._socket], [], [])
+            with self._select_profiler.measure():
+                readers, _, _ = select.select([self._socket], [], [])
+            self._request_profiler.start()
             msgs = []
             while self._socket in readers:
                 msgs.append(self._socket.recvfrom(4096))
@@ -315,6 +322,7 @@ class _UdpLedDisplayServer:
                 # acknowledge the request, and signal the remaining messages to be skipped
                 ack = _pack_udp(self._driver.get(), msg_seq)
                 self._socket.sendto(ack, client_addr)
+            self._request_profiler.stop()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
