@@ -281,7 +281,7 @@ class _UdpLedDisplayServer:
                     # skip setting the display if there was a more recent update request. this will
                     # appear as a timeout to the client. I suppose we could acknowledge these too
                     if display_updated:
-                        log.info('{}:{} request skipped'.format(*client_addr))
+                        log.warning('{}:{} request skipped'.format(*client_addr))
                         continue
 
                     # if the dimensions are wrong, discard
