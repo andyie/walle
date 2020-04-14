@@ -223,20 +223,21 @@ class UdpLedDisplay:
 
         # wait for acknowledgement
         start_t = time.time()
-        readers, _, _ = select.select([self.socket], [], [], self._timeout)
-        while self.socket in readers:
-            rx, _ = self.socket.recvfrom(4096) # should return immediately
-            try:
-                # the request is considered acknowledged if the sequence numbers match. don't
-                # bother verifying dimensions or contents, this may not apply (e.g., if this is
-                # query-only)
-                rx_matrix, rx_msg_seq = _unpack_udp(rx)
-                if rx_msg_seq == tx_msg_seq:
-                    return rx_matrix
-            except RuntimeError as e:
-                pass
-            time_left = self._timeout - (time.time() - start_t)
+        time_left = self._timeout
+        while time_left >= 0:
             readers, _, _ = select.select([self.socket], [], [], time_left)
+            if self.socket in readers:
+                rx, _ = self.socket.recvfrom(4096) # should return immediately
+                try:
+                    # the request is considered acknowledged if the sequence numbers match. don't
+                    # bother verifying dimensions or contents, this may not apply (e.g., if this is
+                    # query-only)
+                    rx_matrix, rx_msg_seq = _unpack_udp(rx)
+                    if rx_msg_seq == tx_msg_seq:
+                        return rx_matrix
+                except RuntimeError as e:
+                    pass
+            time_left = self._timeout - (time.time() - start_t)
         assert not readers
 
         # no acknowledgement in time
