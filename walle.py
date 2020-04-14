@@ -238,7 +238,6 @@ class UdpLedDisplay:
                 except RuntimeError as e:
                     pass
             time_left = self._timeout - (time.time() - start_t)
-        assert not readers
 
         # no acknowledgement in time
         raise TimeoutError('ack timeout for msg {}'.format(tx_msg_seq))
