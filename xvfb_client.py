@@ -93,7 +93,7 @@ if __name__ == '__main__':
 
     driver = walle.create_display(args.target)
     with Xvfb(walle.log, args.x_display, x_dim) as frame_buffer_path:
-        cycle_profiler = walle.Profiler('cycle', walle.log, 10)
+        cycle_profiler = walle.Profiler('cycle', walle.log)
         while True:
             with cycle_profiler.measure():
                 bmp = xwd2bmp(frame_buffer_path)
