@@ -189,45 +189,50 @@ class UdpLedDisplay:
         self._num_consecutive_timeouts = 0
         self._num_total_timeouts = 0
 
-        self._set_profiler = Profiler('display update', log)
+        self._request_profiler = Profiler('display request', log)
 
     def dim(self):
         return tuple(self._dim)
 
     def set(self, matrix):
+        self._request(matrix)
+
+    def get(self):
+        return self._request(None)
+
+    def _request(self, matrix):
         # swallow timeouts unless too many have occurred in a row
-        with self._set_profiler.measure():
+        #
+        # TODO: maybe actually never throw a timeout?
+        with self._request_profiler.measure():
             try:
-                self._set(matrix)
+                ack_matrix = self._request_impl(matrix)
             except TimeoutError as e:
                 self._num_total_timeouts += 1
                 self._num_consecutive_timeouts += 1
-                log.warning('timeout setting display: {}'.format(e))
+                log.warning('timeout requesting display: {}'.format(e))
                 max_consecutive_timeouts = 10
                 if self._num_consecutive_timeouts > max_consecutive_timeouts:
-                    log.error('failing setting display after >{} timeouts in a row'.format(
+                    log.error('failing requesting display after >{} timeouts in a row'.format(
                         max_consecutive_timeouts))
                     raise
             else:
                 self._num_consecutive_timeouts = 0
+                return ack_matrix
 
-    def _set(self, matrix):
-        """
-        Idea here is that after set() returns, the display has observed the update. This keeps
-        semantics with direct driver set(), naturally throttles calls to set(), provides an answer
-        to how to receive replies asynchronously (just don't, do it synchronously), allows the
-        sender to directly bound display latency, and keeps the error-handling at the sender.
-        """
-        # Verify the data matches our own idea of the display dimensions.
-        assert _get_dim(matrix) == self._dim
+        return None
 
-        # Send the data
+    def _request_impl(self, matrix):
+        # sanity-check the matrix (if any) has expected dimensions
+        assert matrix is None or _get_dim(matrix) == self._dim
+
+        # send the data
         tx_msg_seq =  self._msg_seq
         self._msg_seq = (self._msg_seq + 1) % 2**32
         tx = _pack_udp(matrix, tx_msg_seq)
         self.socket.sendto(tx, (self._host, self._port))
 
-        # Wait for the acknowledgement
+        # wait for the acknowledgement
         start = time.time()
         time_left = self._timeout
         acked = False
@@ -240,26 +245,15 @@ class UdpLedDisplay:
                 except RuntimeError as e:
                     pass
                 else:
-                    # if message ID does not match, ignore this message. but if dimensions don't
-                    # match, that's an error. it's overkill to verify contents.
-                    if rx_msg_seq == tx_msg_seq:
-                        rx_dim = _get_dim(rx_matrix)
-                        if rx_dim != self._dim:
-                            raise RuntimeError('Remote display has unexpected dimensions '
-                                               '{}x{}'.format(*rx_dim))
-                        acked = True
+                    # the request is considered acknowledged if the sequence numbers match. don't
+                    # bother verifying dimensions or contents, this may not apply (e.g., if this is
+                    # query-only)
+                    acked = (rx_msg_seq == tx_msg_seq)
             time_left = self._timeout - (time.time() - start)
 
         # if we didn't get an ACK, throw TimeoutError
         if not acked:
             raise TimeoutError('did not receive ack for msg {}'.format(tx_msg_seq))
-
-    def get(self):
-        """
-        Like set(), this interactively fetches the display and blocks until completion. See notes
-        above.
-        """
-        raise RuntimeError('not implemented')
 
 class _UdpLedDisplayServer:
     """
@@ -271,8 +265,8 @@ class _UdpLedDisplayServer:
         self._driver = driver
         self._socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self._socket.bind(host_port)
-        self._last_client = None
-        self._last_msg_seq = None
+        self._last_update_client = None
+        self._last_update_msg_seq = None
 
     def serve_forever(self):
         while True:
@@ -284,53 +278,56 @@ class _UdpLedDisplayServer:
                 readers, _, _ = select.select([self._socket], [], [], 0)
             assert not readers
 
-            # process messages back-to-front until a valid one is found.
-            msg_found = False
-            for msg in reversed(msgs):
-                # if a message has already been processed, then the rest of the (earlier) messages
-                # should be skipped
-                data, client_addr = msg
-                if msg_found:
-                    log.info('{}:{} request skipped'.format(*client_addr))
-                    continue
-
-                # if unpacking the message fails, discard
+            # process messages back-to-front so that the most recent request to set the display
+            display_updated = False
+            for data, client_addr in reversed(msgs):
+                # if unpacking the request fails, discard it
                 try:
                     matrix, msg_seq = _unpack_udp(data)
                 except RuntimeError as e:
                     log.warning('{}:{} request malformed: {}'.format(*client_addr, e))
                     continue
 
-                # if the dimensions are wrong, discard
-                dim = _get_dim(matrix)
-                if dim != driver.dim():
-                    log.warning('{}:{} request has bad dimensions {}x{}'.format(
-                        *client_addr, *dim))
-                    continue
+                # display update steps are only run if a matrix was sent with the request
+                if matrix is not None:
+                    # skip setting the display if there was a more recent update request. this will
+                    # appear as a timeout to the client. I suppose we could acknowledge these too
+                    if display_updated:
+                        log.info('{}:{} request skipped'.format(*client_addr))
+                        continue
 
-                # record the new client
-                if self._last_client != client_addr:
-                    log.info('new client {}:{}'.format(*client_addr))
-                    self._last_client = client_addr
-                    self._last_msg_seq = None
+                    # if the dimensions are wrong, discard
+                    dim = _get_dim(matrix)
+                    if dim != driver.dim():
+                        log.warning('{}:{} request has bad dimensions {}x{}'.format(
+                            *client_addr, *dim))
+                        continue
 
-                # detect missing messages (for fun)
-                if self._last_msg_seq is not None and msg_seq != (self._last_msg_seq + 1) % 2**32:
-                    log.warning('{}:{} requests missing between {} and {}'.format(*client_addr,
-                            self._last_msg_seq, msg_seq))
-                self._last_msg_seq = msg_seq
+                    # record the new client
+                    if self._last_update_client != client_addr:
+                        log.info('new client {}:{}'.format(*client_addr))
+                        self._last_update_client = client_addr
+                        self._last_update_msg_seq = None
 
-                # set the new data to the display. if it times out, treat it the same as a discard
-                try:
-                    driver.set(matrix)
-                except TimeoutError as e:
-                    log.error('{}:{} request timeout setting display: {}'.format(*client_addr, e))
-                    continue
+                    # detect missing messages (for fun)
+                    if self._last_update_msg_seq is not None and \
+                       msg_seq != (self._last_update_msg_seq + 1) % 2**32:
+                        log.warning('{}:{} requests missing between {} and {}'.format(*client_addr,
+                                self._last_update_msg_seq, msg_seq))
+                    self._last_update_msg_seq = msg_seq
+
+                    # set the new data to the display. if it times out, treat it the same as a
+                    # discard. then mark the display as updated this cycle.
+                    try:
+                        driver.set(matrix)
+                    except TimeoutError as e:
+                        log.error('{}:{} request timeout setting display: {}'.format(*client_addr, e))
+                        continue
+                    display_updated = True
 
                 # acknowledge the request, and signal the remaining messages to be skipped
                 ack = _pack_udp(self._driver.get(), msg_seq)
                 self._socket.sendto(ack, client_addr)
-                msg_found = True
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
