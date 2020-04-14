@@ -6,6 +6,14 @@ System packages:
 * `imagemagick`
 * `libatlas-base-dev` on RaspberryPi (otherwise `numpy` fails shared library dependency)
 
+# Status GUI
+
+The status GUI reflects the state of the display:
+
+```
+$ ./status_gui.py 192.168.1.112
+```
+
 # X windows
 
 X programs can be displayed using `xvfb_client.py`:
