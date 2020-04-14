@@ -1,5 +1,4 @@
-Package requirements
-====================
+# Package requirements
 
 System packages:
 * `python-pygame` (required beyond `pip` install due to SDL shared library dependencies)
@@ -7,8 +6,7 @@ System packages:
 * `imagemagick`
 * `libatlas-base-dev` on RaspberryPi (otherwise `numpy` fails shared library dependency)
 
-X windows
-=========
+# X windows
 
 X programs can be displayed using `xvfb_client.py`:
 
@@ -45,8 +43,7 @@ $ DISPLAY=:1 xdotool key Return
 Alternatively, to just watch characters appear in the shell input buffer, do `bash --rcfile <(echo
 export PS1='')`.
 
-Color
-=====
+# Color
 
 Colors are gamma-corrected (raised to power 2.3) before display.
 
