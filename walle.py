@@ -186,7 +186,6 @@ class UdpLedDisplay:
         self._dim = (num_rows, num_cols)
         self._timeout = timeout
         self._msg_seq = 0
-        self._num_consecutive_timeouts = 0
         self._num_total_timeouts = 0
 
         self._request_profiler = Profiler('display request', log)
@@ -201,24 +200,14 @@ class UdpLedDisplay:
         return self._request(None)
 
     def _request(self, matrix):
-        # swallow timeouts unless too many have occurred in a row
-        #
-        # TODO: maybe actually never throw a timeout?
         with self._request_profiler.measure():
             try:
                 ack_matrix = self._request_impl(matrix)
-            except TimeoutError as e:
-                self._num_total_timeouts += 1
-                self._num_consecutive_timeouts += 1
-                log.warning('timeout requesting display: {}'.format(e))
-                max_consecutive_timeouts = 10
-                if self._num_consecutive_timeouts > max_consecutive_timeouts:
-                    log.error('failing requesting display after >{} timeouts in a row'.format(
-                        max_consecutive_timeouts))
-                    raise
-            else:
                 self._num_consecutive_timeouts = 0
                 return ack_matrix
+            except TimeoutError as e:
+                self._num_total_timeouts += 1
+                log.warning('timeout requesting display: {}'.format(e))
 
         return None
 
