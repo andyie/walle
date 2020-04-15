@@ -58,7 +58,7 @@ class Stats:
             self._sum = None
             self._num = 0
 
-class Profiler:
+class IntervalProfiler:
     def __init__(self, name, logger):
         self._stats = Stats(name + ' time', logger)
         self._t0 = None
@@ -78,6 +78,19 @@ class Profiler:
         t = time.perf_counter() - self._t0
         self._t0 = None
         self._stats.sample(t)
+
+class PeriodProfiler:
+    def __init__(self, name, logger):
+        self._stats = Stats(name + ' period', logger)
+        self._then = None
+
+    def mark(self):
+        now = time.perf_counter()
+        if self._then is None:
+            self._then = now
+        else:
+            self._stats.sample(now - self._then)
+            self._then = now
 
 def all_off_matrix(dim):
     # expected to return a copy
@@ -147,7 +160,7 @@ class LocalLedDisplay:
         self._spi.max_speed_hz = sclk_hz
         self._spi.mode = 0b00
 
-        self._spi_xfer_profiler = Profiler('spi xfer', log)
+        self._spi_xfer_profiler = IntervalProfiler('spi xfer', log)
 
         self._dim = (num_rows, num_cols)
 
@@ -201,25 +214,29 @@ class UdpLedDisplay:
         self._msg_seq = 0
         self._num_total_timeouts = 0
 
-        self._request_profiler = Profiler('display request', log)
+        self._set_period_profiler = PeriodProfiler('display set', log)
+        self._get_period_profiler = PeriodProfiler('display get', log)
+        self._get_time_profiler = IntervalProfiler('display set', log)
 
     def dim(self):
         return tuple(self._dim)
 
     def set(self, matrix):
+        self._set_period_profiler.mark()
         self._request(matrix, self._synchronous)
 
     def get(self):
-        return self._request(None, True)
+        self._get_period_profiler.mark()
+        with self._get_time_profiler().measure():
+            return self._request(None, True)
 
     def _request(self, matrix, wait_for_ack):
-        with self._request_profiler.measure():
-            try:
-                ack_matrix = self._request_impl(matrix, wait_for_ack)
-                return ack_matrix
-            except TimeoutError as e:
-                self._num_total_timeouts += 1
-                log.warning('timeout requesting display: {}'.format(e))
+        try:
+            ack_matrix = self._request_impl(matrix, wait_for_ack)
+            return ack_matrix
+        except TimeoutError as e:
+            self._num_total_timeouts += 1
+            log.warning('timeout requesting display: {}'.format(e))
 
         return None
 
@@ -277,8 +294,9 @@ class _UdpLedDisplayServer:
         self._socket.bind(host_port)
         self._last_update_client = None
         self._last_update_msg_seq = None
-        self._select_profiler = Profiler('select wait', log)
-        self._request_profiler = Profiler('request handling', log)
+        self._set_period_profiler = PeriodProfiler('display set', log)
+        self._select_time_profiler = IntervalProfiler('select wait', log)
+        self._request_time_profiler = IntervalProfiler('request handling', log)
 
     def _parse_request_data(self, data):
         # parse the request and validate the matrix, if present
@@ -337,6 +355,7 @@ class _UdpLedDisplayServer:
                 # otherwise, log that the message was skipped
                 if request is last_update_request:
                     try:
+                        self._set_period_profiler.mark()
                         self._driver.set(matrix)
                     except TimeoutError as e:
                         # TODO: can delete this timeout after we make set() asynchronous
@@ -353,9 +372,9 @@ class _UdpLedDisplayServer:
     def serve_forever(self):
         while True:
             # wait for the socket to have pending data, then process the pending requests
-            with self._select_profiler.measure():
+            with self._select_time_profiler.measure():
                 readers, _, _ = select.select([self._socket], [], [])
-            with self._request_profiler.measure():
+            with self._request_time_profiler.measure():
                 self._process_requests()
 
 if __name__ == '__main__':
