@@ -126,12 +126,12 @@ def create_display(target):
         return UdpLedDisplay(target)
 
 class LocalLedDisplay:
-    def __init__(self, bus=0, index=0, num_rows=DEFAULT_NUM_ROWS, num_cols=DEFAULT_NUM_COLS, sclk_hz=250000):
+    def __init__(self, bus=0, index=0, num_rows=DEFAULT_NUM_ROWS, num_cols=DEFAULT_NUM_COLS, sclk_hz=500000):
         """
-        250 KHz SPI should be sufficient to transfer 24 bits of information to 100 LEDs in ~0.01
-        seconds. Some occasional glitching was observed on the real display at 1 MHz.
+        note: for reference, 100 LEDs can be physically updated in ~0.01 seconds at ~250 khz. note
+        that occasional glitching was observed on the real display at 1 mhz.
         """
-        log.info('using spi {}:{}'.format(bus, index))
+        log.info('using spi {}:{} at {} khz'.format(bus, index, sclk_hz / 1e3))
         self._spi = spidev.SpiDev()
         self._spi.open(bus, index)
         self._spi.lsbfirst = False
