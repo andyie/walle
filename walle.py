@@ -17,7 +17,7 @@ DEFAULT_NUM_COLS = 10
 DEFAULT_UDP_SERVER_PORT = 4513
 
 log = logging.getLogger('walle')
-log.setLevel('INFO')
+log.setLevel('DEBUG')
 _formatter = logging.Formatter("%(asctime)s:%(name)s:%(levelname)s: %(message)s")
 
 _log_console_handler = logging.StreamHandler()
@@ -347,7 +347,7 @@ class _UdpLedDisplayServer:
                 # detect missing messages (for fun)
                 if self._last_update_msg_seq is not None:
                     if msg_seq == self._last_update_msg_seq:
-                        log.info('{}:{} repeated message {}'.format(*client_addr, msg_seq))
+                        log.debug('{}:{} repeated message {}'.format(*client_addr, msg_seq))
                     elif msg_seq != (self._last_update_msg_seq + 1) % 2**32:
                         log.warning('{}:{} requests missing between {} and {}'.format(*client_addr,
                                 self._last_update_msg_seq, msg_seq))
@@ -365,7 +365,7 @@ class _UdpLedDisplayServer:
                         # out, which is weird
                         log.error('{}:{} request timeout setting display: {}'.format(*client_addr, e))
                 else:
-                    log.info('{}:{} request {} skipped'.format(*client_addr, msg_seq))
+                    log.debug('{}:{} request {} skipped'.format(*client_addr, msg_seq))
 
             # all valid requests are acknowledged
             ack = _pack_udp(self._driver.get(), msg_seq)
