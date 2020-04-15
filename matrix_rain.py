@@ -8,15 +8,13 @@ import walle
 
 class MatrixRain:
     def __init__(self, num_cols, num_rows, driver):
-        assert num_cols > 0
-        assert num_rows > 0
-        self._dim = (num_cols, num_rows)
-        walle.log.info('using screen {}x{}'.format(*self._dim))
         self._driver = driver
+        walle.log.info('using screen {}x{}'.format(*driver.dim()))
 
         # choose the raindrop size, speed, and generation interval ranges
-        self._raindrop_length_range = (1, int(self._dim[1] * 3 / 4))
-        self._raindrop_speed_range = (self._dim[1] / 2, self._dim[1] / 1.)
+        dim = driver.dim()
+        self._raindrop_length_range = (1, int(dim[1] * 3 / 4))
+        self._raindrop_speed_range = (dim[1] / 2, dim[1] / 1.)
         self._raindrop_gen_time_range = (0.1, 0.1)
 
         self._raindrops = []
@@ -32,7 +30,7 @@ class MatrixRain:
             self._next_raindrop_time = now + random.uniform(*self._raindrop_gen_time_range)
 
         # generate the matrix and send it to the display
-        matrix = walle.all_off_matrix(self._dim)
+        matrix = walle.all_off_matrix(self._driver.dim())
         for raindrop in self._raindrops:
             raindrop.update(now, matrix)
         self._driver.set(matrix)
@@ -42,11 +40,12 @@ class MatrixRain:
 
     def _gen_raindrop(self):
         # note that we actually select from one short of the end of the length range, but whatever
-        start_row = max(random.randrange(-3 * self._dim[1], self._dim[1]), 0)
-        end_row = max(min(random.randrange(0, 4 * self._dim[1]), self._dim[1]), start_row)
-        return MatrixRaindrop(self._dim[0],
-                              self._dim[1],
-                              random.randrange(0, self._dim[0]),
+        dim = self._driver.dim()
+        start_row = max(random.randrange(-3 * dim[1], dim[1]), 0)
+        end_row = max(min(random.randrange(0, 4 * dim[1]), dim[1]), start_row)
+        return MatrixRaindrop(dim[0],
+                              dim[1],
+                              random.randrange(0, dim[0]),
                               start_row,
                               end_row,
                               random.randrange(*self._raindrop_length_range),
