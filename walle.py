@@ -34,7 +34,7 @@ log.addHandler(_log_file_handler)
 log.info('initializing logging: ' + LOG_FILE)
 
 class Stats:
-    def __init__(self, name, logger, period=100):
+    def __init__(self, name, logger, period=1000):
         assert period > 0
         self._name = name
         self._logger = logger
