@@ -43,6 +43,7 @@ class Profiler:
         self._start_t = None
         self._max_t = None
         self._min_t = None
+        self._sum_t = None
         self._num_samples = 0
 
     @contextmanager
@@ -62,12 +63,14 @@ class Profiler:
 
         self._min_t = min(interval_t, self._max_t or interval_t)
         self._max_t = max(interval_t, self._max_t or interval_t)
+        self._sum_t = interval_t + (self._sum_t or 0)
         self._num_samples += 1
         if self._num_samples >= self._sample_period:
-            self._logger.info('{} time min={:.3f}s max={:.3f}s'.format(self._name, self._min_t,
-                                                                       self._max_t))
+            self._logger.info('{} time min={:.3f}s avg={:.3f}s max={:.3f}s'.format(
+                self._name, self._min_t, self._sum_t / self._num_samples, self._max_t))
             self._min_t = None
             self._max_t = None
+            self._sum_t = None
             self._num_samples = 0
 
 def all_off_matrix(dim):
