@@ -144,8 +144,29 @@ def _unpack_udp(data):
 def create_display(target):
     if target == 'spi':
         return LocalLedDisplay()
+    elif target == 'fake':
+        return FakeDisplay()
     else:
         return UdpLedDisplay(target)
+
+class FakeDisplay:
+    def __init__(self, num_rows=DEFAULT_NUM_ROWS, num_cols=DEFAULT_NUM_COLS):
+        log.info('using fake {}x{} display'.format(num_cols, num_rows))
+        self._dim = (num_rows, num_cols)
+        self._current_matrix = None
+        self.set(all_off_matrix(self.dim()))
+
+    def set(self, matrix):
+        # note: it's important that _current_matrix becomes a copy here. store it before gamma
+        # correction.
+        assert _get_dim(matrix) == self._dim
+        self._current_matrix = copy.deepcopy(matrix)
+
+    def get(self):
+        return self._current_matrix
+
+    def dim(self):
+        return tuple(self._dim)
 
 class LocalLedDisplay:
     def __init__(self, bus=0, index=0, num_rows=DEFAULT_NUM_ROWS, num_cols=DEFAULT_NUM_COLS, sclk_hz=500000):
@@ -153,7 +174,8 @@ class LocalLedDisplay:
         note: for reference, 100 LEDs can be physically updated in ~0.01 seconds at ~250 khz. note
         that occasional glitching was observed on the real display at 1 mhz.
         """
-        log.info('using spi {}:{} at {} khz'.format(bus, index, sclk_hz / 1e3))
+        log.info('using {}x{} display on spi {}:{} at {} khz'.format(num_cols, num_rows, bus,
+                index, sclk_hz / 1e3))
         self._spi = spidev.SpiDev()
         self._spi.open(bus, index)
         self._spi.lsbfirst = False
@@ -204,7 +226,7 @@ class UdpLedDisplay:
         """
         relatively long timeout gives the servers's buffers a break if they are falling behind
         """
-        log.info('using server {}:{}'.format(host, port))
+        log.info('using {}x{} display at {}:{}'.format(num_cols, num_rows, host, port))
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self._host = host
         self._port = port
