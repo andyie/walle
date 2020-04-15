@@ -347,7 +347,7 @@ class _UdpLedDisplayServer:
                 # detect missing messages (for fun)
                 if self._last_update_msg_seq is not None:
                     if msg_seq == self._last_update_msg_seq:
-                        log.warning('{}:{} repeated message {}'.format(*client_addr, msg_seq))
+                        log.info('{}:{} repeated message {}'.format(*client_addr, msg_seq))
                     elif msg_seq != (self._last_update_msg_seq + 1) % 2**32:
                         log.warning('{}:{} requests missing between {} and {}'.format(*client_addr,
                                 self._last_update_msg_seq, msg_seq))
@@ -365,7 +365,7 @@ class _UdpLedDisplayServer:
                         # out, which is weird
                         log.error('{}:{} request timeout setting display: {}'.format(*client_addr, e))
                 else:
-                    log.warning('{}:{} request skipped'.format(*client_addr))
+                    log.info('{}:{} request {} skipped'.format(*client_addr, msg_seq))
 
             # all valid requests are acknowledged
             ack = _pack_udp(self._driver.get(), msg_seq)
