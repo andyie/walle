@@ -8,7 +8,14 @@ import time
 import walle
 
 class Fader:
-    def __init__(self):
+    def __init__(self, lo=0., hi=1.):
+        """
+        lo and hi choose the fade range. returned values are clamped to [0, 1], so this provides a
+        way for the fader to be frequently off or on
+        """
+        self._lo = lo
+        self._hi = hi
+        assert self._lo <= self._hi
         self._t0 = None
         self._t1 = None
         self._v0 = self._random_v()
@@ -37,8 +44,7 @@ class Fader:
         return random.uniform(1, 3)
 
     def _random_v(self):
-        # the contrast looks cooler when most faders are dark
-        return max(random.uniform(-2, 1), 0)
+        return min(1., max(0., random.uniform(self._lo, self._hi)))
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -47,8 +53,9 @@ if __name__ == '__main__':
 
     driver = walle.create_display(args.target)
     rows, cols = driver.dim()
-    faders = [[Fader() for _ in range(cols)] for _ in range(rows)]
+    faders = [[tuple(Fader(-10.0, 1.0) for _ in range(3)) for _ in range(cols)] for _ in range(rows)]
+    period = walle.PeriodFloor(0.05)
     while True:
         now = time.time()
-        driver.set([[tuple(f.get(now) for _ in range(3)) for f in row] for row in faders])
-        time.sleep(0.02)
+        driver.set([[tuple(f.get(now) for f in col) for col in row] for row in faders])
+        period.sleep()

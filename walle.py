@@ -46,9 +46,9 @@ class Stats:
         self._num= 0
 
     def sample(self, val):
-        self._min = min(val, self._max or val)
-        self._max = max(val, self._max or val)
-        self._sum = val + (self._sum or 0)
+        self._min = val if self._min is None else min(val, self._min)
+        self._max = val if self._max is None else max(val, self._max)
+        self._sum = val if self._sum is None else val + self._sum
         self._num += 1
         if self._num >= self._period:
             self._logger.info('{} min={:.3f}s avg={:.3f}s max={:.3f}s num={}'.format(
@@ -91,6 +91,21 @@ class PeriodProfiler:
         else:
             self._stats.sample(now - self._then)
             self._then = now
+
+class PeriodFloor:
+    def __init__(self, period):
+        self._then = None
+        self._stats = Stats('period floor delta time', log)
+        self._period = period
+
+    def sleep(self):
+        now = time.perf_counter()
+        if self._then is not None:
+            t = self._period - (now - self._then)
+            self._stats.sample(t)
+            if t > 0:
+                time.sleep(t)
+        self._then = now
 
 def all_off_matrix(dim):
     # expected to return a copy
@@ -198,6 +213,7 @@ class LocalLedDisplay:
             self._spi.xfer(self._flatten(self._gamma_corrected(matrix)))
 
     def get(self):
+        # TODO: Do-and-undo gamma correction so we see integer truncation in feedback
         return self._current_matrix
 
     def dim(self):

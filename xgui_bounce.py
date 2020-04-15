@@ -17,7 +17,6 @@ import random
 import time
 
 # Define some colors
-BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
 
 class Ball:
@@ -34,6 +33,7 @@ class Ball:
         self._pos = [random.uniform(*limits) for limits in self._limits]
         max_speed = [d for d in screen_dim]
         self._vel = [random.uniform(-m, m) for m in max_speed]
+        self._color = tuple(random.choice([0, 255]) for _ in range(3))
         self._then = None
 
     def update(self, now):
@@ -52,7 +52,7 @@ class Ball:
                 self._vel[i] = v
 
         # draw the ball. need to truncate position to integers
-        pygame.draw.circle(self._screen, WHITE, [int(p) for p in self._pos], self._radius)
+        pygame.draw.circle(self._screen, self._color, [int(p) for p in self._pos], self._radius)
 
         self._then = now
 
@@ -74,7 +74,7 @@ def main():
     done = False
     while not done:
         now = time.time()
-        screen.fill(BLACK)
+        screen.fill((0, 0, 0))
         for ball in balls:
             ball.update(now)
         clock.tick(60)

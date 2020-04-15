@@ -11,6 +11,7 @@ if __name__ == '__main__':
 
     driver = walle.create_display(args.target)
     walle.log.info('should shine each color for each led left-to-right for each row top-to-bottom')
+    period = walle.PeriodFloor(0.05)
     while True:
         rows, cols = driver.dim()
         for row in range(rows):
@@ -19,4 +20,4 @@ if __name__ == '__main__':
                     matrix = walle.all_off_matrix(driver.dim())
                     matrix[row][col] = tuple(1 if i == ch else 0 for i in range(3))
                     driver.set(matrix)
-                    time.sleep(0.05)
+                    period.sleep()

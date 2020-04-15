@@ -14,6 +14,7 @@ class StatusDisplay:
 
     def display_forever(self):
         done = False
+        period = walle.PeriodFloor(0.05)
         while not done:
             # record any exit request
             for event in pygame.event.get():
@@ -25,7 +26,7 @@ class StatusDisplay:
             if matrix:
                 self._display_matrix(matrix)
 
-            # don't bother delaying; there are enough delays built-in above
+            period.sleep()
 
         pygame.quit()
 
