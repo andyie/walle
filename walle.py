@@ -4,6 +4,7 @@ import argparse
 from contextlib import contextmanager
 import copy
 import logging, logging.handlers
+import os
 import re
 import select
 import socket
@@ -25,7 +26,7 @@ _log_console_handler.setLevel('INFO')
 _log_console_handler.setFormatter(_formatter)
 log.addHandler(_log_console_handler)
 
-LOG_FILE = '/tmp/walle.log'
+LOG_FILE = '/tmp/walle-{}.log'.format(os.getpid())
 _log_file_handler = logging.handlers.RotatingFileHandler(LOG_FILE, mode='a', maxBytes=10*1024*1024,
                                                          backupCount=2)
 _log_file_handler.setLevel('DEBUG')
@@ -99,13 +100,12 @@ class PeriodFloor:
         self._period = period
 
     def sleep(self):
-        now = time.perf_counter()
         if self._then is not None:
-            t = self._period - (now - self._then)
+            t = self._period - (time.perf_counter() - self._then)
             self._stats.sample(t)
             if t > 0:
                 time.sleep(t)
-        self._then = now
+        self._then = time.perf_counter()
 
 def all_off_matrix(dim):
     # expected to return a copy

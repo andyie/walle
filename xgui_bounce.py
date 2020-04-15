@@ -1,14 +1,4 @@
-#!/usr/bin/python
-
-"""
- This example shows having multiple balls bouncing around the screen at the
- same time. You can hit the space bar to spawn more balls.
-
- Sample Python/Pygame Programs
- Simpson College Computer Science
- http://programarcadegames.com/
- http://simpson.edu/computer-science/
-"""
+#!/usr/bin/env python
 
 import argparse
 import math
@@ -56,7 +46,7 @@ class Ball:
 
         self._then = now
 
-def main():
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--num_balls', type=int, default=1)
     args = parser.parse_args()
@@ -81,6 +71,3 @@ def main():
         pygame.display.flip()
 
     pygame.quit()
-
-if __name__ == "__main__":
-    main()
