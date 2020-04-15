@@ -82,23 +82,23 @@ class MatrixRaindrop:
         self._length = length
         self._speed = speed
 
-        # assign random-ish colors to the entire column.
+        # assign random-ish colors to the entire column. also establish how white the head of the
+        # drop will look. it looks better if drops have a range of whiteness to their heads.
         self._col_colors = [tuple([random.uniform(0.3, 1.0)] * 3) for _ in range(num_rows)]
+        self._head_whiteness = random.uniform(0.0, 0.5)
 
         # figure the top-down per-color-channel fade profile of the raijndrop. note that all
         # elements except the last (lowest) zero out the gain for non-green channels, but the last
-        # chooses maximum gain for all three. the effect here is that the head pixel in the raindrop
-        # will be white-ish and brighter than the others. also, it's not important, but note that
-        # the fade profile does not fully interpolate to 1.0 because it ends one short of the end of
-        # the interpolation range.
-        low_gain = 0.0
+        # applies a head-whiteness gain. the effect here is that the head pixel in the raindrop will
+        # be white-ish and brighter than the others.
+        low_gain = 0.1
         med_gain = 0.7
         high_gain = 1.0
         mid_idx = self._length // 2
         self._raindrop_profile = [(0., numpy.interp([i], [0, mid_idx], [low_gain, med_gain])[0], 0.)
                                     for i in range(mid_idx)] + \
                                  [(0., med_gain, 0.) for i in range(mid_idx, self._length - 1)] + \
-                                 [(0.0, 1.0, 0.0)]
+                                 [(self._head_whiteness, 1.0, self._head_whiteness)]
         assert len(self._raindrop_profile) == self._length
 
         self._start_t = None
@@ -127,7 +127,9 @@ class MatrixRaindrop:
                         for pixel_color, pixel_profile in zip(self._col_colors, vis_profile)]
 
         # install the raindrop in the matrix. installation is by saturating addition. this way
-        # raindrops overlay nicely.
+        # raindrops overlay nicely. another layer of complexity here is that the drop may only be
+        # rendered for a section of the column. this makes the drop seem to come in/disappear in the
+        # middle of the column. sort of a hack.
         for row, raindrop_pixel in enumerate(vis_raindrop):
             if row >= self._start_row and row < self._end_row:
                 matrix[row][self._col] = \
