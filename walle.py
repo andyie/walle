@@ -271,7 +271,7 @@ class UdpLedDisplay:
                 time_left = self._timeout - (time.time() - start_t)
 
             # no acknowledgement in time
-            raise TimeoutError('ack timeout for msg {}'.format(tx_msg_seq))
+            raise TimeoutError('response timeout for msg {}'.format(tx_msg_seq))
         else:
             num_flushed = 0
             while num_flushed < 10:
