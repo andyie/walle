@@ -40,7 +40,9 @@ def colour_to_8bit(color):
     return tuple(int(255 * ch) for ch in color.rgb)
 
 class Stats:
-    def __init__(self, name, logger, period=1000):
+    DEFAULT_PERIOD = 1000
+
+    def __init__(self, name, logger, period=DEFAULT_PERIOD):
         assert period > 0
         self._name = name
         self._logger = logger
@@ -65,8 +67,8 @@ class Stats:
             self._num = 0
 
 class IntervalProfiler:
-    def __init__(self, name, logger):
-        self._stats = Stats(name + ' time', logger)
+    def __init__(self, name, logger, period=Stats.DEFAULT_PERIOD):
+        self._stats = Stats(name + ' time', logger, period)
         self._t0 = None
 
     @contextmanager
@@ -86,8 +88,8 @@ class IntervalProfiler:
         self._stats.sample(t)
 
 class PeriodProfiler:
-    def __init__(self, name, logger):
-        self._stats = Stats(name + ' period', logger)
+    def __init__(self, name, logger, period=Stats.DEFAULT_PERIOD):
+        self._stats = Stats(name + ' period', logger, period)
         self._then = None
 
     def mark(self):
