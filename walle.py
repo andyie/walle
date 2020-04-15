@@ -345,10 +345,12 @@ class _UdpLedDisplayServer:
                     self._last_update_msg_seq = None
 
                 # detect missing messages (for fun)
-                if self._last_update_msg_seq is not None and \
-                   msg_seq != (self._last_update_msg_seq + 1) % 2**32:
-                    log.warning('{}:{} requests missing between {} and {}'.format(*client_addr,
-                            self._last_update_msg_seq, msg_seq))
+                if self._last_update_msg_seq is not None:
+                    if msg_seq == self._last_update_msg_seq:
+                        log.warning('{}:{} repeated message {}'.format(*client_addr, msg_seq))
+                    elif msg_seq != (self._last_update_msg_seq + 1) % 2**32:
+                        log.warning('{}:{} requests missing between {} and {}'.format(*client_addr,
+                                self._last_update_msg_seq, msg_seq))
                 self._last_update_msg_seq = msg_seq
 
                 # if this request is the freshest update request in the queue, actuate it.
