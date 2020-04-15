@@ -31,7 +31,7 @@ class Fader:
 
         # interpolate
         v = numpy.interp([now], [self._t0, self._t1], [self._v0, self._v1])[0]
-        return (v, v, v)
+        return v
         
     def _random_t(self):
         return random.uniform(1, 3)
@@ -50,5 +50,5 @@ if __name__ == '__main__':
     faders = [[Fader() for _ in range(cols)] for _ in range(rows)]
     while True:
         now = time.time()
-        driver.set([[f.get(now) for f in row] for row in faders])
+        driver.set([[tuple(f.get(now) for _ in range(3)) for f in row] for row in faders])
         time.sleep(0.02)
