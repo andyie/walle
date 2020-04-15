@@ -33,18 +33,35 @@ _log_file_handler.setFormatter(_formatter)
 log.addHandler(_log_file_handler)
 log.info('initializing logging: ' + LOG_FILE)
 
-class Profiler:
-    def __init__(self, name, logger, sample_period=100):
+class Stats:
+    def __init__(self, name, logger, period=100):
+        assert period > 0
         self._name = name
         self._logger = logger
-        assert sample_period > 0
-        self._sample_period = sample_period
+        self._period = period
 
-        self._start_t = None
-        self._max_t = None
-        self._min_t = None
-        self._sum_t = None
-        self._num_samples = 0
+        self._max = None
+        self._min = None
+        self._sum = None
+        self._num= 0
+
+    def sample(self, val):
+        self._min = min(val, self._max or val)
+        self._max = max(val, self._max or val)
+        self._sum = val + (self._sum or 0)
+        self._num += 1
+        if self._num >= self._period:
+            self._logger.info('{} min={:.3f}s avg={:.3f}s max={:.3f}s num={}'.format(
+                self._name, self._min, self._sum / self._num, self._max, self._num))
+            self._min = None
+            self._max = None
+            self._sum = None
+            self._num = 0
+
+class Profiler:
+    def __init__(self, name, logger):
+        self._stats = Stats(name + ' time', logger)
+        self._t0 = None
 
     @contextmanager
     def measure(self):
@@ -53,25 +70,14 @@ class Profiler:
         self.stop()
 
     def start(self):
-        assert self._start_t is None
-        self._start_t = time.perf_counter()
+        assert self._t0 is None
+        self._t0 = time.perf_counter()
 
     def stop(self):
-        assert self._start_t is not None
-        interval_t = time.perf_counter() - self._start_t
-        self._start_t = None
-
-        self._min_t = min(interval_t, self._max_t or interval_t)
-        self._max_t = max(interval_t, self._max_t or interval_t)
-        self._sum_t = interval_t + (self._sum_t or 0)
-        self._num_samples += 1
-        if self._num_samples >= self._sample_period:
-            self._logger.info('{} time min={:.3f}s avg={:.3f}s max={:.3f}s'.format(
-                self._name, self._min_t, self._sum_t / self._num_samples, self._max_t))
-            self._min_t = None
-            self._max_t = None
-            self._sum_t = None
-            self._num_samples = 0
+        assert self._t0 is not None
+        t = time.perf_counter() - self._t0
+        self._t0 = None
+        self._stats.sample(t)
 
 def all_off_matrix(dim):
     # expected to return a copy
@@ -185,7 +191,7 @@ class UdpLedDisplay:
         """
         relatively long timeout gives the servers's buffers a break if they are falling behind
         """
-        log.info('sending to server {}:{} with timeout {}'.format(host, port, timeout))
+        log.info('using server {}:{}'.format(host, port))
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self._host = host
         self._port = port
