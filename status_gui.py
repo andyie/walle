@@ -11,23 +11,21 @@ class StatusDisplay:
         pygame.display.set_caption('{} walle status'.format(target))
         self._driver = walle.create_display(args.target)
         self._screen = pygame.display.set_mode([400, 400])
-        self._cycle_profiler = walle.Profiler('status refresh', walle.log)
 
     def display_forever(self):
         done = False
         while not done:
-            with self._cycle_profiler.measure():
-                # record any exit request
-                for event in pygame.event.get():
-                    if event.type == pygame.QUIT:
-                        done = True
+            # record any exit request
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    done = True
 
-                # update the display if a new matrix is available
-                matrix = self._driver.get()
-                if matrix:
-                    self._display_matrix(matrix)
+            # update the display if a new matrix is available
+            matrix = self._driver.get()
+            if matrix:
+                self._display_matrix(matrix)
 
-                time.sleep(0.05)
+            # don't bother delaying; there are enough delays built-in above
 
         pygame.quit()
 

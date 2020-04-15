@@ -227,7 +227,7 @@ class UdpLedDisplay:
 
     def get(self):
         self._get_period_profiler.mark()
-        with self._get_time_profiler().measure():
+        with self._get_time_profiler.measure():
             return self._request(None, True)
 
     def _request(self, matrix, wait_for_ack):
