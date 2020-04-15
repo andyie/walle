@@ -51,4 +51,4 @@ if __name__ == '__main__':
     while True:
         now = time.time()
         driver.set([[f.get(now) for f in row] for row in faders])
-        time.sleep(0.05)
+        time.sleep(0.02)

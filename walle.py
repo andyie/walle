@@ -178,7 +178,7 @@ class LocalLedDisplay:
 
 class UdpLedDisplay:
     def __init__(self, host, port=DEFAULT_UDP_SERVER_PORT, num_rows=DEFAULT_NUM_ROWS,
-                 num_cols=DEFAULT_NUM_COLS, timeout=0.1):
+                 num_cols=DEFAULT_NUM_COLS, synchronous=False, timeout=0.1):
         """
         relatively long timeout gives the servers's buffers a break if they are falling behind
         """
@@ -187,6 +187,7 @@ class UdpLedDisplay:
         self._host = host
         self._port = port
         self._dim = (num_rows, num_cols)
+        self._synchronous = synchronous
         self._timeout = timeout
         self._msg_seq = 0
         self._num_total_timeouts = 0
@@ -197,16 +198,15 @@ class UdpLedDisplay:
         return tuple(self._dim)
 
     def set(self, matrix):
-        self._request(matrix)
+        self._request(matrix, self._synchronous)
 
     def get(self):
-        return self._request(None)
+        return self._request(None, True)
 
-    def _request(self, matrix):
+    def _request(self, matrix, wait_for_ack):
         with self._request_profiler.measure():
             try:
-                ack_matrix = self._request_impl(matrix)
-                self._num_consecutive_timeouts = 0
+                ack_matrix = self._request_impl(matrix, wait_for_ack)
                 return ack_matrix
             except TimeoutError as e:
                 self._num_total_timeouts += 1
@@ -214,7 +214,7 @@ class UdpLedDisplay:
 
         return None
 
-    def _request_impl(self, matrix):
+    def _request_impl(self, matrix, wait_for_ack):
         # sanity-check the matrix (if any) has expected dimensions
         assert matrix is None or _get_dim(matrix) == self._dim
 
@@ -224,26 +224,37 @@ class UdpLedDisplay:
         tx = _pack_udp(matrix, tx_msg_seq)
         self.socket.sendto(tx, (self._host, self._port))
 
-        # wait for acknowledgement
-        start_t = time.time()
-        time_left = self._timeout
-        while time_left >= 0:
-            readers, _, _ = select.select([self.socket], [], [], time_left)
-            if self.socket in readers:
-                rx, _ = self.socket.recvfrom(4096) # should return immediately
-                try:
-                    # the request is considered acknowledged if the sequence numbers match. don't
-                    # bother verifying dimensions or contents, this may not apply (e.g., if this is
-                    # query-only)
-                    rx_matrix, rx_msg_seq = _unpack_udp(rx)
-                    if rx_msg_seq == tx_msg_seq:
-                        return rx_matrix
-                except RuntimeError as e:
-                    pass
-            time_left = self._timeout - (time.time() - start_t)
+        # wait for acknowledgement if requested. otherwise, flush the socket RX queue just to be
+        # polite to the OS buffers
+        if wait_for_ack:
+            start_t = time.time()
+            time_left = self._timeout
+            while time_left >= 0:
+                readers, _, _ = select.select([self.socket], [], [], time_left)
+                if self.socket in readers:
+                    rx, _ = self.socket.recvfrom(4096) # should return immediately
+                    try:
+                        # the request is considered acknowledged if the sequence numbers match. don't
+                        # bother verifying dimensions or contents, this may not apply (e.g., if this is
+                        # query-only)
+                        rx_matrix, rx_msg_seq = _unpack_udp(rx)
+                        if rx_msg_seq == tx_msg_seq:
+                            return rx_matrix
+                    except RuntimeError as e:
+                        pass
+                time_left = self._timeout - (time.time() - start_t)
 
-        # no acknowledgement in time
-        raise TimeoutError('ack timeout for msg {}'.format(tx_msg_seq))
+            # no acknowledgement in time
+            raise TimeoutError('ack timeout for msg {}'.format(tx_msg_seq))
+        else:
+            num_flushed = 0
+            while num_flushed < 10:
+                readers, _, _ = select.select([self.socket], [], [], 0)
+                if not readers:
+                    break
+                self.socket.recvfrom(4096) # should return immediately
+                num_flushed += 1
+            return None
 
 class _UdpLedDisplayServer:
     """
