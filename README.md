@@ -5,6 +5,7 @@ System packages:
 * `xorg-xvfb-server`
 * `imagemagick`
 * `libatlas-base-dev` on RaspberryPi (otherwise `numpy` fails shared library dependency)
+* `ttf-anonymous-pro` for low-res-friendly text scrolling
 
 # Status GUI
 

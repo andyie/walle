@@ -2,6 +2,7 @@
 
 import argparse
 from contextlib import contextmanager
+import colour
 import copy
 import logging, logging.handlers
 import os
@@ -33,6 +34,10 @@ _log_file_handler.setLevel('DEBUG')
 _log_file_handler.setFormatter(_formatter)
 log.addHandler(_log_file_handler)
 log.info('initializing logging: ' + LOG_FILE)
+
+def colour_to_8bit(color):
+    assert type(color) == colour.Color
+    return tuple(int(255 * ch) for ch in color.rgb)
 
 class Stats:
     def __init__(self, name, logger, period=1000):
