@@ -53,9 +53,9 @@ if __name__ == '__main__':
 
     driver = walle.create_display(args.target)
     rows, cols = driver.dim()
-    faders = [[tuple(Fader(-10.0, 1.0) for _ in range(3)) for _ in range(cols)] for _ in range(rows)]
+    faders = [[Fader(-2.0, 1.0) for _ in range(cols)] for _ in range(rows)]
     period = walle.PeriodFloor(0.05)
     while True:
         now = time.time()
-        driver.set([[tuple(f.get(now) for f in col) for col in row] for row in faders])
+        driver.set([[tuple([col.get(now)] * 3) for col in row] for row in faders])
         period.sleep()
