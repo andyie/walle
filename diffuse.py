@@ -4,10 +4,44 @@ import argparse
 import colour
 import copy
 import math
+import numpy
 import random
 import statistics
 import time
 import walle
+
+class Splasher:
+    def __init__(self, num_cols, num_rows):
+        # choose random coordinates for a rectangle to splash to the display
+        self._splash_rows = sorted(random.sample(range(num_rows + 1), 2))
+        self._splash_cols = sorted(random.sample(range(num_cols + 1), 2))
+        self._splash_color = self._get_random_color()
+        self._total_splash_time = random.uniform(0., 10)
+        self._total_elapsed = 0
+
+        walle.log.info('splashing {} from ({}, {}) to ({}, {}) over {:.1f} seconds'.format(
+            self._splash_color, self._splash_rows[0], self._splash_cols[0],
+            self._splash_rows[1] - 1, self._splash_cols[1] - 1, self._total_splash_time))
+
+    def update(self, matrix, elapsed):
+        self._total_elapsed += elapsed
+        if self._total_elapsed > self._total_splash_time:
+            elapsed -= (self._total_elapsed - self._total_splash_time)
+            self._total_elapsed = self._total_splash_time
+        assert elapsed >= 0
+
+        ratio = elapsed / self._total_splash_time
+        add = tuple(ch * ratio for ch in self._splash_color.rgb)
+        for row in range(*self._splash_rows):
+            for col in range(*self._splash_cols):
+                matrix[row][col] = tuple(min(x + y, 1.) for x, y in zip(matrix[row][col], add))
+
+    def is_done(self):
+        return self._total_elapsed >= self._total_splash_time
+
+    def _get_random_color(self):
+        colors = ['red', 'green', 'blue']
+        return colour.Color(random.choice(colors))
 
 class Diffuse:
     DIFFUSION_HALF_LIFE_S = 2
@@ -82,6 +116,7 @@ class Diffuse:
 
         self._brightness_stats = walle.Stats('channel brightness', walle.log)
 
+        self._splashers = []
         self._last_update_time = None
         self._next_splash_time = None
 
@@ -92,10 +127,12 @@ class Diffuse:
             self._next_splash_time = now
         elapsed = now - self._last_update_time
 
-        self._matrix = self._decayed(self._diffused(self._matrix, elapsed), elapsed)
-        assert self._matrix
+        self._matrix = self._diffused(self._matrix, elapsed)
+        self._matrix = self._decayed(self._matrix, elapsed)
+        self._matrix = self._splashed(self._matrix, elapsed)
+
         if now >= self._next_splash_time:
-            self._matrix = self._splashed(self._matrix)
+            self._splashers.append(Splasher(*self._driver.dim()))
             self._next_splash_time = now + random.uniform(0., Diffuse.MAX_SPLASH_PERIOD)
 
         self._driver.set(self._matrix)
@@ -134,25 +171,13 @@ class Diffuse:
         return [[tuple(w * ch for ch in matrix[row][col]) for col in range(num_cols)]
                     for row in range(num_rows)]
 
-    def _splashed(self, matrix):
-        # choose random coordinates for a rectangle to splash to the display
-        num_cols, num_rows = self._driver.dim()
-        rows = sorted(random.sample(range(num_rows + 1), 2))
-        cols = sorted(random.sample(range(num_cols + 1), 2))
-        color = self._get_random_color()
-        walle.log.info('splashing {} from ({}, {}) to ({}, {})'.format(color,
-            rows[0], cols[0], rows[1] - 1, cols[1] - 1))
-
-        # note: splashes below are added, but they could also just pave over the existing values.
-        # this will make the display overall slightly dimmer, because existing brightness is removed
-        return [[tuple(min(x + y, 1.) for x, y in zip(matrix[row][col], (0, 0, 0) if
-                        (row not in range(*rows) or col not in range(*cols)) else color.rgb))
-                    for col in range(num_cols)]
-                        for row in range(num_rows)]
-
-    def _get_random_color(self):
-        colors = ['red', 'green', 'blue']
-        return colour.Color(random.choice(colors))
+    def _splashed(self, matrix, elapsed):
+        # run and garbage-collect splashers.
+        new_matrix = copy.deepcopy(matrix)
+        for splasher in self._splashers:
+            splasher.update(new_matrix, elapsed)
+        self._splashers = [splasher for splasher in self._splashers if not splasher.is_done()]
+        return new_matrix
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
