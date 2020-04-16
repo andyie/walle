@@ -12,11 +12,15 @@ import walle
 
 class Splasher:
     def __init__(self, num_cols, num_rows):
-        # choose random coordinates for a rectangle to splash to the display
-        self._splash_rows = sorted(random.sample(range(num_rows + 1), 2))
-        self._splash_cols = sorted(random.sample(range(num_cols + 1), 2))
+        # choose random coordinates for a rectangle to splash to the display.
+        #
+        # hack: restrict rectangle size. dirty hack, originally didn't want to restrict
+        self._dim = (num_cols, num_rows)
+        self._splash_cols, self._splash_rows, splash_dim = self._get_splash_zone()
+        while splash_dim[0] * splash_dim[1] > 21: # allow 3x7 but not 4x6
+            self._splash_cols, self._splash_rows, splash_dim = self._get_splash_zone()
         self._splash_color = self._get_random_color()
-        self._total_splash_time = random.uniform(0., 10)
+        self._total_splash_time = random.uniform(1., 10.)
         self._total_elapsed = 0
 
         walle.log.info('splashing {} from ({}, {}) to ({}, {}) over {:.1f} seconds'.format(
@@ -39,13 +43,19 @@ class Splasher:
     def is_done(self):
         return self._total_elapsed >= self._total_splash_time
 
+    def _get_splash_zone(self):
+        cols = sorted(random.sample(range(self._dim[0] + 1), 2))
+        rows = sorted(random.sample(range(self._dim[1] + 1), 2))
+        dim = (cols[1] - cols[0], rows[1] - rows[0])
+        return cols, rows, dim
+
     def _get_random_color(self):
         colors = ['red', 'green', 'blue']
         return colour.Color(random.choice(colors))
 
 class Diffuse:
     DIFFUSION_HALF_LIFE_S = 2
-    MAX_SPLASH_PERIOD = 5
+    MAX_SPLASH_PERIOD = 10
 
     def __init__(self, driver):
         self._driver = driver
@@ -111,7 +121,6 @@ class Diffuse:
         x = 1.0
         S = 0.05
         self._decay_rate = -math.log(1 - x / (S + x)) / approx_t
-        print('decay rate: ', self._decay_rate)
         assert self._decay_rate < 0.5 # arbitrary sanity-check
 
         self._brightness_stats = walle.Stats('channel brightness', walle.log)
