@@ -55,7 +55,7 @@ class Splasher:
 
 class Diffuse:
     DIFFUSION_HALF_LIFE_S = 2
-    MAX_SPLASH_PERIOD = 10
+    AVG_SPLASH_PERIOD = 5
 
     def __init__(self, driver):
         self._driver = driver
@@ -88,8 +88,8 @@ class Diffuse:
         #   r < -ln(1 - x / (S + x)) / t
         #
         # of course, t is random. but on average, it should be the expected value of the update time
-        # (one half the configured max splash delay time) times the probability that this pixel is
-        # updated times the probability this channel is updated.
+        # times the probability that this pixel is updated times the probability this channel is
+        # updated.
         #
         # note: this math gets easier if channels are simply paved over, because then their history
         # is effectively deleted
@@ -117,7 +117,7 @@ class Diffuse:
         # practice x is 1.0, since we splash colors full-brightness. choose some relatively-low S so
         # that the display is dim most of the time. that gives it a nice dynamic range when the
         # splashes appear
-        approx_t = 0.5 * Diffuse.MAX_SPLASH_PERIOD / (16. / 100) / (1. / 3)
+        approx_t = Diffuse.AVG_SPLASH_PERIOD / (16. / 100) / (1. / 3)
         x = 1.0
         S = 0.05
         self._decay_rate = -math.log(1 - x / (S + x)) / approx_t
@@ -142,7 +142,7 @@ class Diffuse:
 
         if now >= self._next_splash_time:
             self._splashers.append(Splasher(*self._driver.dim()))
-            self._next_splash_time = now + random.uniform(0., Diffuse.MAX_SPLASH_PERIOD)
+            self._next_splash_time = now + numpy.random.poisson(Diffuse.AVG_SPLASH_PERIOD)
 
         self._driver.set(self._matrix)
         self._brightness_stats.sample(statistics.mean(ch for row in self._matrix
