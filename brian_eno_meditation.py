@@ -10,17 +10,21 @@ import statistics
 import time
 import walle
 
-class Splasher:
-    def __init__(self, num_cols, num_rows):
+class Splash:
+    def __init__(self,
+                 num_cols,
+                 num_rows,
+                 max_splash_area,
+                 splash_time):
         # choose random coordinates for a rectangle to splash to the display.
         #
         # hack: restrict rectangle size. dirty hack, originally didn't want to restrict
         self._dim = (num_cols, num_rows)
         self._splash_cols, self._splash_rows, splash_dim = self._get_splash_zone()
-        while splash_dim[0] * splash_dim[1] > 21: # allow 3x7 but not 4x6
+        while splash_dim[0] * splash_dim[1] > max_splash_area:
             self._splash_cols, self._splash_rows, splash_dim = self._get_splash_zone()
         self._splash_color = self._get_random_color()
-        self._total_splash_time = random.uniform(1., 10.)
+        self._total_splash_time = splash_time
         self._total_elapsed = 0
 
         walle.log.info('splashing {} from ({}, {}) to ({}, {}) over {:.1f} seconds'.format(
@@ -34,7 +38,12 @@ class Splasher:
             self._total_elapsed = self._total_splash_time
         assert elapsed >= 0
 
-        ratio = elapsed / self._total_splash_time
+        if self._total_splash_time > 0:
+            ratio = elapsed / self._total_splash_time
+        else:
+            # note: I think this has a vulnerability, where if this function is called multiple
+            # times without any time elapsed, it will keep getting its color over and over
+            ratio = 1.
         add = tuple(ch * ratio for ch in self._splash_color.rgb)
         for row in range(*self._splash_rows):
             for col in range(*self._splash_cols):
@@ -53,19 +62,32 @@ class Splasher:
         colors = ['red', 'green', 'blue']
         return colour.Color(random.choice(colors))
 
-class Diffuse:
-    DIFFUSION_HALF_LIFE_S = 2
-    AVG_SPLASH_PERIOD = 5
-
-    def __init__(self, driver):
+class Splasher:
+    def __init__(self, driver,
+                 diffusion_half_life,
+                 avg_splash_rate,
+                 max_splash_area,
+                 min_splash_time=1.,
+                 max_splash_time=10.,
+                 target_avg_brightness=0.05):
         self._driver = driver
         self._matrix = walle.all_off_matrix(driver.dim())
 
         # figure the diffusion rate from its desired half-life. note that since diffusion is color
         # quantity-conservative, it doesn't (i think?) impact the math for managing brightness decay
         # below.
-        self._diffusion_rate = math.log(2.) / Diffuse.DIFFUSION_HALF_LIFE_S
+        self._diffusion_rate = math.log(2.) / diffusion_half_life
 
+        self._avg_splash_rate = avg_splash_rate
+        self._min_splash_time = min_splash_time
+        self._max_splash_time = max_splash_time
+        assert self._min_splash_time <= self._max_splash_time
+
+        # TODO: the below math is a bit out of date now, since instead of choosing fairly among all
+        # possible rectangles, we now first choose a rectangle shape, and then choose a rectangle
+        # position. this biases toward larger rectangles. the math also doesn't account for
+        # dimension restrictions.
+        #
         # figure the decay rate from the desired steady-state channel brightness. the issue
         # identified here is that if the decay rate is too low, the quantity of color in the display
         # will rise until the display saturates. the goal is to keep the "steady state" per-channel
@@ -117,17 +139,17 @@ class Diffuse:
         # practice x is 1.0, since we splash colors full-brightness. choose some relatively-low S so
         # that the display is dim most of the time. that gives it a nice dynamic range when the
         # splashes appear
-        approx_t = Diffuse.AVG_SPLASH_PERIOD / (16. / 100) / (1. / 3)
+        approx_t = (1. / avg_splash_rate) / (16. / 100) / (1. / 3)
         x = 1.0
-        S = 0.05
-        self._decay_rate = -math.log(1 - x / (S + x)) / approx_t
-        assert self._decay_rate < 0.5 # arbitrary sanity-check
+        self._decay_rate = -math.log(1 - x / (target_avg_brightness + x)) / approx_t
 
         self._brightness_stats = walle.Stats('channel brightness', walle.log)
 
-        self._splashers = []
-        self._last_update_time = None
+        self._splashes = []
+        self._max_splash_area = max_splash_area
         self._next_splash_time = None
+
+        self._last_update_time = None
 
     def update(self):
         now = time.perf_counter()
@@ -141,8 +163,11 @@ class Diffuse:
         self._matrix = self._splashed(self._matrix, elapsed)
 
         if now >= self._next_splash_time:
-            self._splashers.append(Splasher(*self._driver.dim()))
-            self._next_splash_time = now + random.expovariate(1. / Diffuse.AVG_SPLASH_PERIOD)
+            self._splashes.append(Splash(*self._driver.dim(),
+                                         max_splash_area=self._max_splash_area,
+                                         splash_time=random.uniform(self._min_splash_time,
+                                                                    self._max_splash_time)))
+            self._next_splash_time = now + random.expovariate(self._avg_splash_rate)
 
         self._driver.set(self._matrix)
         self._brightness_stats.sample(statistics.mean(ch for row in self._matrix
@@ -181,11 +206,11 @@ class Diffuse:
                     for row in range(num_rows)]
 
     def _splashed(self, matrix, elapsed):
-        # run and garbage-collect splashers.
+        # run and garbage-collect splashes.
         new_matrix = copy.deepcopy(matrix)
-        for splasher in self._splashers:
-            splasher.update(new_matrix, elapsed)
-        self._splashers = [splasher for splasher in self._splashers if not splasher.is_done()]
+        for splash in self._splashes:
+            splash.update(new_matrix, elapsed)
+        self._splashes = [splash for splash in self._splashes if not splash.is_done()]
         return new_matrix
 
 if __name__ == '__main__':
@@ -194,7 +219,13 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     driver = walle.create_display(args.target)
-    diffuse = Diffuse(driver)
+    diffuse = Splasher(driver,
+                       diffusion_half_life=2.,
+                       avg_splash_rate=0.2,
+                       min_splash_time=1.,
+                       max_splash_time=10.,
+                       max_splash_area=21,
+                       target_avg_brightness=0.05)
     period = walle.PeriodFloor(0.05)
     while True:
         diffuse.update()
