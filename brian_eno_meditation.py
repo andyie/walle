@@ -142,7 +142,7 @@ class Diffuse:
 
         if now >= self._next_splash_time:
             self._splashers.append(Splasher(*self._driver.dim()))
-            self._next_splash_time = now + numpy.random.poisson(Diffuse.AVG_SPLASH_PERIOD)
+            self._next_splash_time = now + random.expovariate(1. / Diffuse.AVG_SPLASH_PERIOD)
 
         self._driver.set(self._matrix)
         self._brightness_stats.sample(statistics.mean(ch for row in self._matrix
