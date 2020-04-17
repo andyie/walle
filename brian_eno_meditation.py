@@ -147,7 +147,6 @@ class Splasher:
 
         self._splashes = []
         self._max_splash_area = max_splash_area
-        self._next_splash_time = None
 
         self._last_update_time = None
 
@@ -155,19 +154,17 @@ class Splasher:
         now = time.perf_counter()
         if self._last_update_time is None:
             self._last_update_time = now
-            self._next_splash_time = now
         elapsed = now - self._last_update_time
 
         self._matrix = self._diffused(self._matrix, elapsed)
         self._matrix = self._decayed(self._matrix, elapsed)
         self._matrix = self._splashed(self._matrix, elapsed)
 
-        if now >= self._next_splash_time:
+        for _ in range(numpy.random.poisson(self._avg_splash_rate * elapsed)):
             self._splashes.append(Splash(*self._driver.dim(),
                                          max_splash_area=self._max_splash_area,
                                          splash_time=random.uniform(self._min_splash_time,
                                                                     self._max_splash_time)))
-            self._next_splash_time = now + random.expovariate(self._avg_splash_rate)
 
         self._driver.set(self._matrix)
         self._brightness_stats.sample(statistics.mean(ch for row in self._matrix
