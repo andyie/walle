@@ -216,14 +216,14 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     driver = walle.create_display(args.target)
-    diffuse = Splasher(driver,
-                       diffusion_half_life=2.,
-                       avg_splash_rate=0.2,
-                       min_splash_time=1.,
-                       max_splash_time=10.,
-                       max_splash_area=21,
-                       target_avg_brightness=0.05)
+    splasher = Splasher(driver,
+                        diffusion_half_life=2.,
+                        avg_splash_rate=0.2,
+                        min_splash_time=1.,
+                        max_splash_time=10.,
+                        max_splash_area=21,
+                        target_avg_brightness=0.05)
     period = walle.PeriodFloor(0.05)
     while True:
-        diffuse.update()
+        splasher.update()
         period.sleep()
