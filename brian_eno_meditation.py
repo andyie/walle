@@ -76,7 +76,13 @@ class Splasher:
         # figure the diffusion rate from its desired half-life. note that since diffusion is color
         # quantity-conservative, it doesn't (i think?) impact the math for managing brightness decay
         # below.
-        self._diffusion_rate = math.log(2.) / diffusion_half_life
+        #
+        # a half-life of 0 is a special case that disables diffusion
+        if diffusion_half_life == 0:
+            self._diffusion_rate = 0
+        else:
+            self._diffusion_rate = math.log(2.) / diffusion_half_life
+        assert self._diffusion_rate >= 0
 
         self._avg_splash_rate = avg_splash_rate
         self._min_splash_time = min_splash_time
@@ -217,7 +223,7 @@ if __name__ == '__main__':
 
     driver = walle.create_display(args.target)
     splasher = Splasher(driver,
-                        diffusion_half_life=2.,
+                        diffusion_half_life=0.,
                         avg_splash_rate=0.2,
                         min_splash_time=1.,
                         max_splash_time=10.,
