@@ -211,6 +211,9 @@ class LocalLedDisplay:
         self._dim = (num_rows, num_cols)
 
         self._gamma_correct = gamma_correct
+        if not self._gamma_correct:
+            log.info('Note: not using gamma correction')
+
         self._current_matrix = None
         self.set(all_off_matrix(self.dim()))
 

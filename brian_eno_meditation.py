@@ -226,7 +226,7 @@ if __name__ == '__main__':
                         diffusion_half_life=0.,
                         avg_splash_rate=0.2,
                         min_splash_time=1.,
-                        max_splash_time=10.,
+                        max_splash_time=4.,
                         max_splash_area=21,
                         target_avg_brightness=0.05)
     period = walle.PeriodFloor(0.05)
