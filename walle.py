@@ -166,6 +166,8 @@ def _unpack_udp(data):
 def create_display(target):
     if target == 'spi':
         return LocalLedDisplay()
+    elif target == 'spi_no_gamma':
+        return LocalLedDisplay(gamma_correct=False)
     elif target == 'fake':
         return FakeDisplay()
     else:
@@ -191,7 +193,7 @@ class FakeDisplay:
         return tuple(self._dim)
 
 class LocalLedDisplay:
-    def __init__(self, bus=0, index=0, num_rows=DEFAULT_NUM_ROWS, num_cols=DEFAULT_NUM_COLS, sclk_hz=500000):
+    def __init__(self, gamma_correct=True, bus=0, index=0, num_rows=DEFAULT_NUM_ROWS, num_cols=DEFAULT_NUM_COLS, sclk_hz=500000):
         """
         note: for reference, 100 LEDs can be physically updated in ~0.01 seconds at ~250 khz. note
         that occasional glitching was observed on the real display at 1 mhz.
@@ -208,6 +210,7 @@ class LocalLedDisplay:
 
         self._dim = (num_rows, num_cols)
 
+        self._gamma_correct = gamma_correct
         self._current_matrix = None
         self.set(all_off_matrix(self.dim()))
 
@@ -217,7 +220,9 @@ class LocalLedDisplay:
         assert _get_dim(matrix) == self._dim
         self._current_matrix = copy.deepcopy(matrix)
         with self._spi_xfer_profiler.measure():
-            self._spi.xfer(self._flatten(self._gamma_corrected(matrix)))
+            if self._gamma_correct:
+                matrix = self._gamma_corrected(matrix)
+            self._spi.xfer(self._flatten(matrix))
 
     def get(self):
         # TODO: Do-and-undo gamma correction so we see integer truncation in feedback
