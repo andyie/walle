@@ -114,6 +114,9 @@ class PeriodFloor:
                 time.sleep(t)
         self._then = time.perf_counter()
 
+    def get_period(self):
+        return self._period
+
 def all_off_matrix(dim):
     # expected to return a copy
     return [[(0., 0., 0.) for _ in range(dim[0])] for _ in range(dim[1])]

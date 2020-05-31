@@ -224,11 +224,11 @@ if __name__ == '__main__':
     driver = walle.create_display(args.target)
     splasher = Splasher(driver,
                         diffusion_half_life=0.,
-                        avg_splash_rate=0.2,
+                        avg_splash_rate=0.1,
                         min_splash_time=1.,
                         max_splash_time=4.,
                         max_splash_area=21,
-                        target_avg_brightness=0.05)
+                        target_avg_brightness=0.01)
     period = walle.PeriodFloor(0.05)
     while True:
         splasher.update()
