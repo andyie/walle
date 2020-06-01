@@ -129,7 +129,7 @@ if __name__ == '__main__':
     driver = walle.create_display(args.target)
     period = walle.PeriodFloor(0.01)
     game_step_period = 1.0
-    fade_time = game_step_period * 1.5 # otherwise it seems to pause...
+    fade_time = game_step_period
     profiler = walle.PeriodProfiler('display refresh', walle.log, period=10)
     game_of_life = None
     while True:
