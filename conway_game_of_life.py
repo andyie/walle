@@ -80,29 +80,26 @@ class ConwayGameOfLifeDisplay:
             else:
                 return black
 
-    def __init__(self, driver, game_step_period, fade_time, max_time):
+    def __init__(self, driver, game_step_period, fade_time, max_generations):
         self._driver = driver
         self._game_step_period = game_step_period
-        self._max_time = max_time
+        self._max_generations = max_generations
         num_rows, num_cols = driver.dim()
         dim = driver.dim()
         self._game = ConwayGameOfLife(num_rows, num_cols)
         self._game.set_grid(numpy.random.choice([False, True], dim))
         self._cells = [[ConwayGameOfLifeDisplay.Cell(fade_time, row, col)
                             for col in range(num_cols)] for row in range(num_rows)]
-        self._start_time = None
+        self._num_generations = 0
         self._last_step = None
         self._timed_out = False
         self._game_update_profiler = \
-            walle.IntervalProfiler('game update', walle.log, period=10)
+            walle.IntervalProfiler('game update', walle.log, period=100)
         self._cell_update_profiler = \
-            walle.IntervalProfiler('cells display update', walle.log, period=100)
+            walle.IntervalProfiler('cells display update', walle.log)
 
     def update(self):
         now = time.time()
-
-        if self._start_time is None:
-            self._start_time = now
 
         grid = self._game.get_grid()
         with self._cell_update_profiler.measure():
@@ -115,8 +112,9 @@ class ConwayGameOfLifeDisplay:
                 self._game.update()
             self._last_step = now
 
-        if now - self._start_time > self._max_time:
-            self._timed_out = True
+            self._num_generations += 1
+            if self._num_generations >= self._max_generations:
+                self._timed_out = True
 
     def done(self):
         return self._timed_out or self._game.num_stuck_cycles() > 10
@@ -124,21 +122,21 @@ class ConwayGameOfLifeDisplay:
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('target', type=str, help='The display to connect to')
+    parser.add_argument('--game_step_period', type=float, default=0.5, help='Game of life step time')
     args = parser.parse_args()
 
     driver = walle.create_display(args.target)
     period = walle.PeriodFloor(0.01)
-    game_step_period = 1.0
-    fade_time = game_step_period
-    profiler = walle.PeriodProfiler('display refresh', walle.log, period=10)
+    fade_time = args.game_step_period * 1.5
+    profiler = walle.PeriodProfiler('display refresh', walle.log)
     game_of_life = None
     while True:
         if game_of_life is None or game_of_life.done():
             walle.log.info('New game!')
             game_of_life = ConwayGameOfLifeDisplay(driver,
                                                    fade_time=fade_time,
-                                                   game_step_period=game_step_period,
-                                                   max_time=300.)
+                                                   game_step_period=args.game_step_period,
+                                                   max_generations=300)
 
         game_of_life.update()
         profiler.mark()
