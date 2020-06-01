@@ -54,7 +54,7 @@ class ConwayGameOfLifeDisplay:
             self._fade_time = fade_time
             self._row = row
             self._col = col
-            self._current_color = colour.Color('black')
+            self._current_color = (0., 0., 0.)
             self._color_fader = ColorFader(self._current_color,
                                            self._current_color,
                                            0)
@@ -64,21 +64,21 @@ class ConwayGameOfLifeDisplay:
             if target_color != self._current_color:
                 self._color_fader.set(target_color, self._fade_time)
                 self._current_color = target_color
-            return self._color_fader.get(now).rgb
+            return self._color_fader.get(now)
 
         def _get_color(self, alive, num_neighs_alive):
-            def get_color_name():
-                if alive:
-                    if 0 <= num_neighs_alive < 2:
-                        return 'red'
-                    elif 2 <= num_neighs_alive < 4:
-                        return 'gray'
-                    else:
-                        return 'red'
+            red = (1., 0., 0.)
+            gray = (0.5, 0.5, 0.5)
+            black = (0., 0., 0.)
+            if alive:
+                if 0 <= num_neighs_alive < 2:
+                    return red
+                elif 2 <= num_neighs_alive < 4:
+                    return gray
                 else:
-                    return 'black'
-
-            return colour.Color(get_color_name())
+                    return red
+            else:
+                return black
 
     def __init__(self, driver, game_step_period, fade_time, max_time):
         self._driver = driver
@@ -93,6 +93,10 @@ class ConwayGameOfLifeDisplay:
         self._start_time = None
         self._last_step = None
         self._timed_out = False
+        self._game_update_profiler = \
+            walle.IntervalProfiler('game update', walle.log, period=10)
+        self._cell_update_profiler = \
+            walle.IntervalProfiler('cells display update', walle.log, period=100)
 
     def update(self):
         now = time.time()
@@ -101,12 +105,14 @@ class ConwayGameOfLifeDisplay:
             self._start_time = now
 
         grid = self._game.get_grid()
-        matrix = [[cell.update(now, grid[row][col], self._game.get_num_neighs_alive(row, col))
-                    for col, cell in enumerate(cells)] for row, cells in enumerate(self._cells)]
+        with self._cell_update_profiler.measure():
+            matrix = [[cell.update(now, grid[row][col], self._game.get_num_neighs_alive(row, col))
+                        for col, cell in enumerate(cells)] for row, cells in enumerate(self._cells)]
         self._driver.set(matrix)
 
         if self._last_step is None or now - self._last_step >= self._game_step_period:
-            self._game.update()
+            with self._game_update_profiler.measure():
+                self._game.update()
             self._last_step = now
 
         if now - self._start_time > self._max_time:
@@ -124,7 +130,7 @@ if __name__ == '__main__':
     period = walle.PeriodFloor(0.01)
     game_step_period = 1.0
     fade_time = game_step_period * 1.5 # otherwise it seems to pause...
-    profiler = walle.PeriodProfiler('period', walle.log, period=10)
+    profiler = walle.PeriodProfiler('display refresh', walle.log, period=10)
     game_of_life = None
     while True:
         if game_of_life is None or game_of_life.done():

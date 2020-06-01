@@ -9,14 +9,14 @@ import time
 import walle
 
 class ColorFader:
-    def __init__(self, c0, c1, t):
-        self._rgb_faders = [Fader(c0.rgb[i], c1.rgb[i], t) for i in range(3)]
+    def __init__(self, rgb0, rgb1, t):
+        self._rgb_faders = [Fader(rgb0[i], rgb1[i], t) for i in range(3)]
 
     def get(self, now):
-        return colour.Color(rgb=tuple(f.get(now) for f in self._rgb_faders))
+        return tuple(f.get(now) for f in self._rgb_faders)
 
     def set(self, c, t):
-        for f, ch in zip(self._rgb_faders, c.rgb):
+        for f, ch in zip(self._rgb_faders, c):
             f.set(ch, t)
 
     def done(self):
@@ -24,8 +24,8 @@ class ColorFader:
 
     def get_color_range(self):
         v_ranges = [f.get_v_range() for f in self._rgb_faders]
-        return (colour.Color(rgb=tuple(v_range[0] for v_range in v_ranges)),
-                colour.Color(rgb=tuple(v_range[1] for v_range in v_ranges)))
+        return (tuple(v_range[0] for v_range in v_ranges),
+                tuple(v_range[1] for v_range in v_ranges))
 
 class Fader:
     def __init__(self, v0, v1, t):
@@ -74,7 +74,7 @@ class RandomFader:
         self._lo = lo
         self._hi = hi
         assert self._lo <= self._hi
-        self._color_fader = ColorFader(colour.Color('black'),
+        self._color_fader = ColorFader((0., 0., 0.),
                                        self._random_color(),
                                        self._random_t())
 
@@ -84,7 +84,7 @@ class RandomFader:
             self._color_fader.set(self._random_color(), self._random_t())
 
         # interpolate
-        return self._color_fader.get(now).rgb
+        return self._color_fader.get(now)
 
     def _random_t(self):
         return random.uniform(1, 3)
@@ -92,7 +92,7 @@ class RandomFader:
     def _random_color(self):
         def rand_v():
             return min(1., max(0., random.uniform(self._lo, self._hi)))
-        return colour.Color(rgb=tuple([rand_v()] * 3))
+        return tuple([rand_v()] * 3)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
