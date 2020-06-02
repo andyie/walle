@@ -54,35 +54,40 @@ class ConwayGameOfLifeDisplay:
             self._fade_time = fade_time
             self._row = row
             self._col = col
-            self._current_color = (0., 0., 0.)
-            self._color_fader = ColorFader(self._current_color,
-                                           self._current_color,
-                                           0)
+            self._num_generations = None
+            self._alive = None
+            self._last_alive = None
+            self._color_fader = ColorFader((0., 0., 0.), (0., 0., 0.), 0)
 
-        def update(self, now, alive, num_neighs_alive):
-            target_color = self._get_color(alive, num_neighs_alive)
-            if target_color != self._current_color:
-                self._color_fader.set(target_color, self._fade_time)
-                self._current_color = target_color
+        def update(self, now, alive, num_neighs_alive, num_generations):
+            if num_generations != self._num_generations:
+                self._num_generations = num_generations
+                self._last_alive = self._alive
+                self._alive = alive
+                new_color = self._get_color(num_neighs_alive)
+                if new_color != self._color_fader.get_color_range()[1]:
+                    self._color_fader.set(new_color, self._fade_time)
             return self._color_fader.get(now)
 
-        def _get_color(self, alive, num_neighs_alive):
+        def _get_color(self, num_neighs_alive):
             red = (1., 0., 0.)
+            green = (0., 1., 0.)
+            blue = (0., 0., 1.)
             gray = (0.5, 0.5, 0.5)
             black = (0., 0., 0.)
-            if alive:
+            if self._alive:
                 if 0 <= num_neighs_alive < 2:
                     return red
                 elif 2 <= num_neighs_alive < 4:
-                    return gray
+                    return gray if self._last_alive else blue
                 else:
                     return red
             else:
                 return black
 
-    def __init__(self, driver, game_step_period, fade_time, max_generations):
+    def __init__(self, driver, game_step_time, fade_time, max_generations):
         self._driver = driver
-        self._game_step_period = game_step_period
+        self._game_step_time = game_step_time
         self._max_generations = max_generations
         num_rows, num_cols = driver.dim()
         dim = driver.dim()
@@ -103,11 +108,12 @@ class ConwayGameOfLifeDisplay:
 
         grid = self._game.get_grid()
         with self._cell_update_profiler.measure():
-            matrix = [[cell.update(now, grid[row][col], self._game.get_num_neighs_alive(row, col))
+            matrix = [[cell.update(now, grid[row][col], self._game.get_num_neighs_alive(row, col),
+                                   self._num_generations)
                         for col, cell in enumerate(cells)] for row, cells in enumerate(self._cells)]
         self._driver.set(matrix)
 
-        if self._last_step is None or now - self._last_step >= self._game_step_period:
+        if self._last_step is None or now - self._last_step >= self._game_step_time:
             with self._game_update_profiler.measure():
                 self._game.update()
             self._last_step = now
@@ -122,12 +128,21 @@ class ConwayGameOfLifeDisplay:
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('target', type=str, help='The display to connect to')
-    parser.add_argument('--game_step_period', type=float, default=0.5, help='Game of life step time')
+    parser.add_argument('--game_step_time', type=float, default=1., help='Game of life step time')
+    parser.add_argument('--fade_time_prop', type=float, default=1., help='Fade time proportion')
+    parser.add_argument('--max_generations', type=int, help='Max generations')
     args = parser.parse_args()
+
+    assert args.game_step_time > 0
+    assert args.fade_time_prop >= 0
+    max_generations = args.max_generations
+    if max_generations is None:
+        max_generations = int(60 / args.game_step_time)
+    walle.log.info('limiting games to {} generations'.format(max_generations))
 
     driver = walle.create_display(args.target)
     period = walle.PeriodFloor(0.01)
-    fade_time = args.game_step_period * 1.5
+    fade_time = args.game_step_time * args.fade_time_prop
     profiler = walle.PeriodProfiler('display refresh', walle.log)
     game_of_life = None
     while True:
@@ -135,8 +150,8 @@ if __name__ == '__main__':
             walle.log.info('New game!')
             game_of_life = ConwayGameOfLifeDisplay(driver,
                                                    fade_time=fade_time,
-                                                   game_step_period=args.game_step_period,
-                                                   max_generations=300)
+                                                   game_step_time=args.game_step_time,
+                                                   max_generations=max_generations)
 
         game_of_life.update()
         profiler.mark()
