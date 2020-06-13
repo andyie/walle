@@ -12,6 +12,8 @@ import walle
 
 
 def _r(pixel):
+    if pixel == (255, 255, 255):
+        return (0, 0, 0)
     return tuple([subpixel/255. for subpixel in pixel])
 
 
@@ -21,6 +23,7 @@ class ImageDisplay:
         self.image = Image.open(path)
         self.frames = []
         self.frame_idx = 0
+        self.period = im.info['duration'] / 1000  # ms to s
 
         # Prepare frames
         orig_height, orig_width = self.image.size
@@ -47,7 +50,7 @@ if __name__ == '__main__':
 
     driver = walle.create_display(args.target)
     image = ImageDisplay(driver, args.image)
-    period = walle.PeriodFloor(0.05)
+    period = walle.PeriodFloor(image.period)
     while True:
         image.update()
         period.sleep()
