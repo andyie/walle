@@ -10,13 +10,6 @@ from PIL import Image, ImageSequence
 
 import walle
 
-im = Image.open("animation.fli")
-
-index = 1
-for frame in ImageSequence.Iterator(im):
-    frame.save("frame%d.png" % index)
-    index += 1
-
 
 class ImageDisplay:
     def __init__(self, driver, path):
