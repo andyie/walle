@@ -14,7 +14,7 @@ import walle
 class ImageDisplay:
     def __init__(self, driver, path):
         self.driver = driver
-        self.image = Image.open(path).convert('RGB')
+        self.image = Image.open(path)
         self.frames = []
 
         # Prepare frames
@@ -26,9 +26,9 @@ class ImageDisplay:
                 
         if self.image.is_animated:
             for frame in ImageSequence.Iterator(self.image):
-                self.frames.append([[frame.get_pixel((x, y)) for x in disp_width] for y in disp_height])
+                self.frames.append([[frame.convert('RGB').get_pixel((x, y)) for x in disp_width] for y in disp_height])
         else:
-            self.frames.append([[self.image.get_pixel((x, y)) for x in disp_width] for y in disp_height])
+            self.frames.append([[self.image.convert('RGB').get_pixel((x, y)) for x in disp_width] for y in disp_height])
 
     def update(self):
         while True:
