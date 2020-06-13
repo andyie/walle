@@ -23,7 +23,7 @@ class ImageDisplay:
         self.image = Image.open(path)
         self.frames = []
         self.frame_idx = 0
-        self.period = im.info['duration'] / 1000  # ms to s
+        self.period = self.image.info['duration'] / 1000  # ms to s
 
         # Prepare frames
         orig_height, orig_width = self.image.size
