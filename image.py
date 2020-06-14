@@ -24,7 +24,7 @@ class ImageDisplay:
         factor_height = orig_height // disp_height + 1
         factor_width = orig_width // disp_width + 1
                 
-        if self.image.is_animated:
+        if self.image.format == 'GIF' and self.image.is_animated:
             for frame in ImageSequence.Iterator(self.image):
                 self.frames.append([[self._r(frame.resize((disp_height, disp_width), 
                                                            Image.BICUBIC).convert('RGBA').getpixel((x, y)))
