@@ -53,7 +53,7 @@ class ImageDisplay:
         pixel_color.luminance *= alpha
         pixel_color.hue = (pixel_color.hue + hue_shift) % 1.0
         if hue_shift:
-            pixel_color.saturation = 1 - (1 - pixel_color.saturation) / 4
+            pixel_color.saturation = 1 - (1 - pixel_color.saturation) / 1.5
         return pixel_color.rgb
 
     def update(self):
