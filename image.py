@@ -39,8 +39,8 @@ class ImageDisplay:
             self.period = 0.05
             for party_idx in range(party_n_colors):
                 hue_shift = party_idx / party_n_colors
-                self.frames.append([[self._r(resized_image.getpixel((x, y)))
-                                     for x in range(disp_width)] for y in range(disp_height)], hue_shift)
+                self.frames.append([[self._r(resized_image.getpixel((x, y)), hue_shift)
+                                     for x in range(disp_width)] for y in range(disp_height)])
         else:
             self.frames.append([[self._r(self.image.resize((disp_height, disp_width), 
                                                            Image.BICUBIC).convert('RGBA').getpixel((x, y)))
@@ -52,6 +52,8 @@ class ImageDisplay:
         pixel_color = colour.Color(rgb=tuple([subpixel / 255. for subpixel in pixel_rgba[:3]]))
         pixel_color.luminance *= alpha
         pixel_color.hue = (pixel_color.hue + hue_shift) % 1.0
+        if hue_shift:
+            pixel_color.saturation = 1 - (1 - pixel_color.saturation) / 4
         return pixel_color.rgb
 
     def update(self):
