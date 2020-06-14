@@ -28,7 +28,7 @@ class ImageDisplay:
         if self.image.format == 'GIF' and self.image.is_animated:
             party_n_colors = self.image.n_frames
             for frame_idx, frame in enumerate(ImageSequence.Iterator(self.image)):
-                hue_shift = (frame_idx / party_n_colors) % 1.0 if party else 0
+                hue_shift = frame_idx / party_n_colors if party else 0
                 self.frames.append([[self._r(frame.resize((disp_height, disp_width), 
                                                            Image.BICUBIC).convert('RGBA').getpixel((x, y)), hue_shift)
                                      for x in range(disp_width)] for y in range(disp_height)])
@@ -37,8 +37,8 @@ class ImageDisplay:
         elif party:
             resized_image = self.image.resize((disp_height, disp_width), Image.BICUBIC).convert('RGBA')
             self.period = 0.05
-            for party_idx in range(self.party_n_colors):
-                hue_shift = (frame_idx / party_n_colors) % 1.0
+            for party_idx in range(party_n_colors):
+                hue_shift = party_idx / party_n_colors
                 self.frames.append([[self._r(resized_image.getpixel((x, y)))
                                      for x in range(disp_width)] for y in range(disp_height)], hue_shift)
         else:
@@ -51,7 +51,7 @@ class ImageDisplay:
         alpha = pixel_rgba[3] / 255
         pixel_color = colour.Color(rgb=tuple([subpixel / 255. for subpixel in pixel_rgba[:3]]))
         pixel_color.luminance *= alpha
-        pixel_color.hue = pixel_color.hue + hue_shift
+        pixel_color.hue = (pixel_color.hue + hue_shift) % 1.0
         return pixel_color.rgb
 
     def update(self):
