@@ -29,7 +29,7 @@ class ImageDisplay:
                 self.frames.append([[self._r(frame.resize((disp_height, disp_width), 
                                                            Image.BICUBIC).convert('RGBA').getpixel((x, y)))
                                      for x in range(disp_width)] for y in range(disp_height)])
-            self.period = self.image['duration'] / 1000.  # ms to s
+            self.period = self.image.info['duration'] / 1000.  # ms to s
         else:
             self.frames.append([[self._r(self.image.resize((disp_height, disp_width), 
                                                            Image.BICUBIC).convert('RGBA').getpixel((x, y)))
