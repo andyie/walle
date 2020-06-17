@@ -14,6 +14,7 @@ class Rain:
                                   max_splash_time=0.,
                                   max_splash_area=1,
                                   target_avg_brightness=0.5)
+        self._rate_stats = walle.Stats('rain rate', walle.log)
         self._splash_rate = 1.
         self._max_splash_rate = 50.
         self._min_splash_rate = 1.
@@ -23,6 +24,7 @@ class Rain:
         self._splash_rate *= random.uniform(0.9, 1.1)
         self._splash_rate = min(max(self._splash_rate, self._min_splash_rate), self._max_splash_rate)
         self._splasher.set_params(self._splash_rate, 1.0) # hard-code the decay rate
+        self._rate_stats.sample(self._splash_rate)
         self._splasher.update()
 
 if __name__ == '__main__':
