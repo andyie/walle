@@ -16,7 +16,7 @@ class Rain:
                                   target_avg_brightness=0.5)
         self._rate_stats = walle.Stats('rain rate', walle.log)
         self._max_splash_rate = 50.
-        self._min_splash_rate = 1.
+        self._min_splash_rate = 0.2
         self._splash_rate = self._min_splash_rate
 
     def update(self):
