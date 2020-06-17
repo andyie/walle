@@ -21,7 +21,12 @@ class Rain:
 
     def update(self):
         # choose a new splash rate with a random-walk
-        self._splash_rate *= random.uniform(0.9, 1.1)
+        mult = random.uniform(1., 1.2)
+        if random.choice([False, True]):
+            # this is my attempt at making the rate balance out to 0 net change. can't just select
+            # uniformly from 1/1.1 to 1.1; this will have a bias.
+            mult = 1. / mult
+        self._splash_rate *= mult
         self._splash_rate = min(max(self._splash_rate, self._min_splash_rate), self._max_splash_rate)
         self._splasher.set_params(self._splash_rate, 1.0) # hard-code the decay rate
         self._rate_stats.sample(self._splash_rate)
