@@ -27,7 +27,7 @@ class Splash:
         self._total_splash_time = splash_time
         self._total_elapsed = 0
 
-        walle.log.info('splashing {} from ({}, {}) to ({}, {}) over {:.1f} seconds'.format(
+        walle.log.debug('splashing {} from ({}, {}) to ({}, {}) over {:.1f} seconds'.format(
             self._splash_color, self._splash_rows[0], self._splash_cols[0],
             self._splash_rows[1] - 1, self._splash_cols[1] - 1, self._total_splash_time))
 
@@ -188,7 +188,7 @@ class Splasher:
         w = math.exp(-self._diffusion_rate * elapsed)
         assert w >= 0. and w <= 1.
 
-        # let each pixel retain "weight" of its own color and obtain "weight"/4 from each of its
+        # let each pixel retain "weight" of its own color and obtain "weight"/8 from each of its
         # neighbors. this should effectively conserve the quantity of each color on the display.
         # boundary pixels are provided themselves as neighbors in boundary directions.
         #
@@ -198,7 +198,8 @@ class Splasher:
         def diffused_pixel(col, row):
             p = matrix[row][col]
             neighs = [matrix[max(min(row + i, num_rows - 1), 0)][max(min(col + j, num_cols - 1), 0)]
-                        for i, j in [(-1, 0), (0, 1), (1, 0), (0, -1)]]
+                        for i, j in [(-1, 0), (0, 1), (1, 0), (0, -1), # directly adjacent
+                                     (-1, -1), (-1, 1), (1, 1), (1, -1)]] # diagonal adjacent
             return tuple(min(w * p[i] + (1. - w) * sum(n[i] for n in neighs) / len(neighs), 1.)
                         for i in range(3))
         return [[diffused_pixel(col, row) for col in range(num_cols)] for row in range(num_rows)]
