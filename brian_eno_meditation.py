@@ -156,6 +156,11 @@ class Splasher:
 
         self._last_update_time = None
 
+    def set_params(self, avg_splash_rate, decay_rate):
+        # Sort of a hack to update the splash rate/decay rate.
+        self._avg_splash_rate = avg_splash_rate
+        self._decay_rate = decay_rate
+
     def update(self):
         now = time.perf_counter()
         if self._last_update_time is None:

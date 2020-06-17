@@ -66,13 +66,15 @@ class Fader:
         return (self._v0, self._v1)
 
 class RandomFader:
-    def __init__(self, lo=0., hi=1.):
+    def __init__(self, lo=0., hi=1., min_t=1., max_t=3.):
         """
         lo and hi choose the fade range. returned values are clamped to [0, 1], so this provides a
         way for the fader to be frequently off or on
         """
         self._lo = lo
         self._hi = hi
+        self._min_t = min_t
+        self._max_t = max_t
         assert self._lo <= self._hi
         self._color_fader = ColorFader((0., 0., 0.),
                                        self._random_color(),
@@ -87,7 +89,7 @@ class RandomFader:
         return self._color_fader.get(now)
 
     def _random_t(self):
-        return random.uniform(1, 3)
+        return random.uniform(self._min_t, self._max_t)
 
     def _random_color(self):
         def rand_v():
