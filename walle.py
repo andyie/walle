@@ -59,7 +59,7 @@ class Stats:
         self._sum = val if self._sum is None else val + self._sum
         self._num += 1
         if self._num >= self._period:
-            self._logger.info('{} min={:.3f}s avg={:.3f}s max={:.3f}s num={}'.format(
+            self._logger.info('{} min={:.3f} avg={:.3f} max={:.3f} num={}'.format(
                 self._name, self._min, self._sum / self._num, self._max, self._num))
             self._min = None
             self._max = None
