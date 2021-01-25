@@ -225,8 +225,8 @@ class ConwayGameOfLifeDisplay:
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('target', type=str, help='The display to connect to')
-    parser.add_argument('--game_step_time', type=float, default=1., help='Game of life step time')
-    parser.add_argument('--fade_time_prop', type=float, default=1., help='Fade time proportion')
+    parser.add_argument('--game_step_time', type=float, default=0.3, help='Game of life step time')
+    parser.add_argument('--fade_time_prop', type=float, default=1.2, help='Fade time proportion')
     args = parser.parse_args()
 
     assert args.game_step_time > 0
